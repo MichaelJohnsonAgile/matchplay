@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { teamsAPI } from '../../services/api'
 
 const TEAM_COLORS = {
   blue: {
@@ -44,13 +45,7 @@ export function TeamsTab({ gameDayId, settings }) {
   async function loadTeams() {
     try {
       setLoading(true)
-      const response = await fetch(`/api/gamedays/${gameDayId}/teams`)
-      
-      if (!response.ok) {
-        throw new Error('Failed to load teams')
-      }
-      
-      const data = await response.json()
+      const data = await teamsAPI.getForGameDay(gameDayId)
       setTeams(data)
       setError(null)
     } catch (err) {
@@ -66,16 +61,7 @@ export function TeamsTab({ gameDayId, settings }) {
     setError(null)
     
     try {
-      const response = await fetch(`/api/gamedays/${gameDayId}/teams/generate`, {
-        method: 'POST'
-      })
-      
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || 'Failed to generate teams')
-      }
-      
-      const data = await response.json()
+      const data = await teamsAPI.generate(gameDayId)
       setTeams(data.teams)
     } catch (err) {
       console.error('Error generating teams:', err)

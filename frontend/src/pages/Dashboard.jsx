@@ -271,23 +271,23 @@ export default function Dashboard() {
                   </button>
                 )}
                 
-                <div className="flex justify-between items-start mb-2 pr-10">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-semibold text-base">{formatGameDayDate(gameDay.date)}</h3>
-                      <span className={`px-2 py-0.5 text-xs font-medium rounded ${
-                        gameDay.settings?.format === 'teams' 
-                          ? 'bg-blue-100 text-blue-800' 
-                          : 'bg-gray-100 text-gray-700'
-                      }`}>
-                        {gameDay.settings?.format === 'teams' ? 'Teams' : 'Groups'}
-                      </span>
-                    </div>
-                    <p className="text-sm text-gray-600">{gameDay.venue}</p>
+                <div className="pr-10">
+                  <div className="flex justify-between items-start mb-1">
+                    <h3 className="font-semibold text-base">{formatGameDayDate(gameDay.date)}</h3>
+                    <span className={`px-3 py-1 text-xs font-medium border whitespace-nowrap ${getStatusColor(gameDay.status)}`}>
+                      {getStatusText(gameDay.status, gameDay.date)}
+                    </span>
                   </div>
-                  <span className={`px-3 py-1 text-xs font-medium border ${getStatusColor(gameDay.status)}`}>
-                    {getStatusText(gameDay.status, gameDay.date)}
-                  </span>
+                  <div className="flex items-center gap-2 mb-2">
+                    <p className="text-sm text-gray-600">{gameDay.venue}</p>
+                    <span className={`px-2 py-0.5 text-xs font-medium rounded whitespace-nowrap ${
+                      gameDay.settings?.format === 'teams' 
+                        ? 'bg-blue-100 text-blue-700' 
+                        : 'bg-gray-100 text-gray-600'
+                    }`}>
+                      {gameDay.settings?.format === 'teams' ? 'Teams' : 'Groups'}
+                    </span>
+                  </div>
                 </div>
                 <div className="flex gap-4 text-sm text-gray-600 mb-3">
                   <span>{gameDay.athleteCount} Athletes</span>

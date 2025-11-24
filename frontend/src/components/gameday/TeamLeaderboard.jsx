@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { teamsAPI } from '../../services/api'
 
 const TEAM_COLORS = {
   blue: {
@@ -45,13 +46,7 @@ export function TeamLeaderboard({ gameDayId }) {
   
   async function loadStandings() {
     try {
-      const response = await fetch(`/api/gamedays/${gameDayId}/teams/standings`)
-      
-      if (!response.ok) {
-        throw new Error('Failed to load standings')
-      }
-      
-      const data = await response.json()
+      const data = await teamsAPI.getStandings(gameDayId)
       setStandings(data)
     } catch (err) {
       console.error('Failed to load standings:', err)
