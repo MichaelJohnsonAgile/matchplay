@@ -55,7 +55,8 @@ export default function Dashboard() {
   // Filter game days to show last 2 previous + upcoming
   const getFilteredGameDays = () => {
     if (showAllGameDays) {
-      return gameDays
+      // Sort all game days with most recent first
+      return [...gameDays].sort((a, b) => new Date(b.date) - new Date(a.date))
     }
 
     const today = new Date()
@@ -72,8 +73,7 @@ export default function Dashboard() {
       .sort((a, b) => new Date(a.date) - new Date(b.date)) // Earliest first
       .slice(0, 2)
 
-    return [...pastGameDays, ...upcomingGameDays]
-      .sort((a, b) => new Date(b.date) - new Date(a.date))
+    return [...upcomingGameDays, ...pastGameDays]
   }
 
   const filteredGameDays = getFilteredGameDays()
@@ -161,6 +161,34 @@ export default function Dashboard() {
     }
   }
 
+  const shouldHighlight = (gameDay) => {
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const gameDate = new Date(gameDay.date)
+    gameDate.setHours(0, 0, 0, 0)
+    
+    // Highlight if it's today
+    if (gameDate.getTime() === today.getTime()) {
+      return true
+    }
+    
+    // Highlight if it's the soonest upcoming game day
+    const upcomingGameDays = filteredGameDays.filter(gd => {
+      const d = new Date(gd.date)
+      d.setHours(0, 0, 0, 0)
+      return d >= today && gd.status === 'upcoming'
+    })
+    
+    if (upcomingGameDays.length > 0) {
+      const soonest = upcomingGameDays.reduce((earliest, current) => {
+        return new Date(current.date) < new Date(earliest.date) ? current : earliest
+      })
+      return soonest.id === gameDay.id
+    }
+    
+    return false
+  }
+
   return (
     <div className="min-h-screen bg-white">
       <header className="border-b border-gray-200 p-4">
@@ -207,11 +235,17 @@ export default function Dashboard() {
           </div>
         ) : (
           <div className="space-y-3 mb-4">
-            {filteredGameDays.map((gameDay) => (
+            {filteredGameDays.map((gameDay) => {
+              const isHighlighted = shouldHighlight(gameDay)
+              return (
               <div
                 key={gameDay.id}
                 onClick={() => handleGameDayClick(gameDay.id)}
-                className="border border-gray-200 p-4 cursor-pointer hover:bg-gray-50 transition-colors relative group"
+                className={`border p-4 cursor-pointer transition-colors relative group ${
+                  isHighlighted 
+                    ? 'border-[#377850] border-2 bg-green-50 hover:bg-green-100' 
+                    : 'border-gray-200 hover:bg-gray-50'
+                }`}
               >
                 {/* Delete button */}
                 <button
@@ -241,7 +275,8 @@ export default function Dashboard() {
                   <span>{gameDay.rounds} Rounds</span>
                 </div>
               </div>
-            ))}
+            )
+            })}
             
             {!showAllGameDays && gameDays.length > filteredGameDays.length && (
               <button
