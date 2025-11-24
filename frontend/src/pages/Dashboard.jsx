@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Modal from '../components/Modal'
+import { ConfirmModal, AlertModal } from '../components/Alert'
 import Skeleton from '../components/Skeleton'
 import { gameDayAPI, leaderboardAPI, athleteAPI } from '../services/api'
 import { formatGameDayDate } from '../utils/dateFormat'
@@ -15,6 +16,10 @@ export default function Dashboard() {
   const [leaderboard, setLeaderboard] = useState([])
   const [isLoadingLeaderboard, setIsLoadingLeaderboard] = useState(true)
   const [error, setError] = useState(null)
+  
+  // Alert and confirm modals
+  const [alertModal, setAlertModal] = useState({ isOpen: false, title: '', message: '', type: 'info' })
+  const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: '', message: '', onConfirm: null })
   
   useEffect(() => {
     loadGameDays()
@@ -79,6 +84,45 @@ export default function Dashboard() {
 
   const handleGameDayClick = (gameDayId) => {
     navigate(`/gameday/${gameDayId}`)
+  }
+
+  const handleDeleteGameDay = (e, gameDayId, gameDay) => {
+    e.stopPropagation() // Prevent card click
+    
+    const hasMatches = gameDay.matchCount > 0
+    const warningMessage = hasMatches
+      ? `Are you sure you want to delete this game day?\n\nThis will permanently delete ${gameDay.matchCount} match(es) and all associated data.\n\nThis action cannot be undone.`
+      : `Are you sure you want to delete this game day?\n\nThis action cannot be undone.`
+    
+    setConfirmModal({
+      isOpen: true,
+      title: 'Delete Game Day',
+      message: warningMessage,
+      onConfirm: () => confirmDeleteGameDay(gameDayId),
+      confirmText: 'Delete',
+      confirmColor: 'red'
+    })
+  }
+
+  const confirmDeleteGameDay = async (gameDayId) => {
+    try {
+      await gameDayAPI.delete(gameDayId)
+      await loadGameDays() // Reload game days
+      setAlertModal({
+        isOpen: true,
+        title: 'Success',
+        message: 'Game day deleted successfully',
+        type: 'success'
+      })
+    } catch (err) {
+      console.error('Failed to delete game day:', err)
+      setAlertModal({
+        isOpen: true,
+        title: 'Error',
+        message: err.message || 'Failed to delete game day. Please try again.',
+        type: 'error'
+      })
+    }
   }
 
   const getStatusColor = (status) => {
@@ -155,9 +199,20 @@ export default function Dashboard() {
               <div
                 key={gameDay.id}
                 onClick={() => handleGameDayClick(gameDay.id)}
-                className="border border-gray-200 p-4 cursor-pointer hover:bg-gray-50 transition-colors"
+                className="border border-gray-200 p-4 cursor-pointer hover:bg-gray-50 transition-colors relative group"
               >
-                <div className="flex justify-between items-start mb-2">
+                {/* Delete button */}
+                <button
+                  onClick={(e) => handleDeleteGameDay(e, gameDay.id, gameDay)}
+                  className="absolute top-3 right-3 w-8 h-8 flex items-center justify-center text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors opacity-0 group-hover:opacity-100"
+                  title="Delete game day"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                </button>
+                
+                <div className="flex justify-between items-start mb-2 pr-10">
                   <div>
                     <h3 className="font-semibold text-lg">{formatGameDayDate(gameDay.date)}</h3>
                     <p className="text-sm text-gray-600">{gameDay.venue}</p>
@@ -298,6 +353,26 @@ export default function Dashboard() {
           onSuccess={loadLeaderboard}
         />
       </Modal>
+
+      {/* Alert Modal */}
+      <AlertModal
+        isOpen={alertModal.isOpen}
+        onClose={() => setAlertModal({ ...alertModal, isOpen: false })}
+        title={alertModal.title}
+        message={alertModal.message}
+        type={alertModal.type}
+      />
+
+      {/* Confirm Modal */}
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        onClose={() => setConfirmModal({ ...confirmModal, isOpen: false })}
+        onConfirm={confirmModal.onConfirm}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        confirmText={confirmModal.confirmText || 'Confirm'}
+        confirmColor={confirmModal.confirmColor || 'black'}
+      />
     </div>
   )
 }
@@ -467,7 +542,7 @@ function CreateGameDayForm({ onClose, onSuccess }) {
           disabled={isSubmitting}
           className="flex-1 bg-[#377850] text-white px-4 py-2 text-sm font-medium disabled:bg-gray-400"
         >
-          {isSubmitting ? 'Creating...' : 'Create Game Day'}
+          {isSubmitting ? 'Creating...' : 'Create'}
         </button>
       </div>
     </form>
