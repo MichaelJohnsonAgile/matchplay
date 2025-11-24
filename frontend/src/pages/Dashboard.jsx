@@ -2,12 +2,13 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Modal from '../components/Modal'
 import Skeleton from '../components/Skeleton'
-import { gameDayAPI, leaderboardAPI } from '../services/api'
+import { gameDayAPI, leaderboardAPI, athleteAPI } from '../services/api'
 import { formatGameDayDate } from '../utils/dateFormat'
 
 export default function Dashboard() {
   const navigate = useNavigate()
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
+  const [isAthleteModalOpen, setIsAthleteModalOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [gameDays, setGameDays] = useState([])
   const [showAllGameDays, setShowAllGameDays] = useState(false)
@@ -195,9 +196,18 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* Overall Season Leaderboard */}
+        {/* Leaderboard */}
         <div className="mt-8">
-          <h2 className="text-lg font-semibold mb-4">Overall Season Leaderboard</h2>
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-lg font-semibold">Leaderboard</h2>
+            <button
+              onClick={() => setIsAthleteModalOpen(true)}
+              className="bg-[#377850] text-white w-10 h-10 flex items-center justify-center text-2xl font-light hover:bg-[#2d5f40] transition-colors rounded leading-none"
+              title="Add Athlete"
+            >
+              +
+            </button>
+          </div>
           
           {isLoadingLeaderboard ? (
             <div className="space-y-2">
@@ -275,6 +285,17 @@ export default function Dashboard() {
         <CreateGameDayForm 
           onClose={() => setIsCreateModalOpen(false)}
           onSuccess={loadGameDays}
+        />
+      </Modal>
+
+      <Modal
+        isOpen={isAthleteModalOpen}
+        onClose={() => setIsAthleteModalOpen(false)}
+        title="Add Athlete"
+      >
+        <CreateAthleteForm 
+          onClose={() => setIsAthleteModalOpen(false)}
+          onSuccess={loadLeaderboard}
         />
       </Modal>
     </div>
@@ -447,6 +468,117 @@ function CreateGameDayForm({ onClose, onSuccess }) {
           className="flex-1 bg-[#377850] text-white px-4 py-2 text-sm font-medium disabled:bg-gray-400"
         >
           {isSubmitting ? 'Creating...' : 'Create Game Day'}
+        </button>
+      </div>
+    </form>
+  )
+}
+
+function CreateAthleteForm({ onClose, onSuccess }) {
+  const [formData, setFormData] = useState({
+    name: '',
+    email: ''
+  })
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [error, setError] = useState(null)
+
+  const handleChange = (e) => {
+    const { name, value } = e.target
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }))
+  }
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    
+    if (!formData.name.trim()) {
+      setError('Athlete name is required')
+      return
+    }
+
+    setIsSubmitting(true)
+    setError(null)
+    
+    try {
+      const newAthlete = await athleteAPI.create({
+        name: formData.name.trim(),
+        email: formData.email.trim()
+      })
+      
+      console.log('Created athlete:', newAthlete)
+      
+      // Notify parent to refresh list
+      if (onSuccess) {
+        await onSuccess()
+      }
+      
+      // Close modal
+      onClose()
+    } catch (err) {
+      console.error('Failed to create athlete:', err)
+      setError('Failed to create athlete. Please try again.')
+      setIsSubmitting(false)
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      {error && (
+        <div className="border border-red-500 bg-red-50 p-3 text-sm text-red-800">
+          {error}
+        </div>
+      )}
+      
+      <div>
+        <label className="block text-sm font-medium mb-1">
+          Name <span className="text-red-500">*</span>
+        </label>
+        <input
+          type="text"
+          name="name"
+          value={formData.name}
+          onChange={handleChange}
+          required
+          placeholder="e.g., John Smith"
+          className="w-full border border-gray-200 px-3 py-2 text-sm"
+          autoFocus
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium mb-1">
+          Email <span className="text-gray-400 text-xs">(optional)</span>
+        </label>
+        <input
+          type="email"
+          name="email"
+          value={formData.email}
+          onChange={handleChange}
+          placeholder="e.g., john@example.com"
+          className="w-full border border-gray-200 px-3 py-2 text-sm"
+        />
+      </div>
+
+      <div className="border-t border-gray-200 pt-4 text-xs text-gray-600">
+        <p>The athlete will be automatically assigned the next available rank.</p>
+      </div>
+
+      <div className="flex gap-2 pt-2">
+        <button
+          type="button"
+          onClick={onClose}
+          className="flex-1 border border-gray-200 px-4 py-2 text-sm font-medium hover:bg-gray-50"
+        >
+          Cancel
+        </button>
+        <button
+          type="submit"
+          disabled={isSubmitting}
+          className="flex-1 bg-[#377850] text-white px-4 py-2 text-sm font-medium disabled:bg-gray-400 hover:bg-[#2d5f40]"
+        >
+          {isSubmitting ? 'Adding...' : 'Add Athlete'}
         </button>
       </div>
     </form>
