@@ -544,6 +544,8 @@ export default function MatchesTab({ gameDayId, gameDay, isAdminMode = false }) 
               </label>
               <input
                 type="number"
+                inputMode="numeric"
+                pattern="[0-9]*"
                 min="0"
                 value={tempScores.teamA}
                 onChange={(e) => setTempScores(prev => ({ ...prev, teamA: e.target.value }))}
@@ -562,6 +564,8 @@ export default function MatchesTab({ gameDayId, gameDay, isAdminMode = false }) 
               </label>
               <input
                 type="number"
+                inputMode="numeric"
+                pattern="[0-9]*"
                 min="0"
                 value={tempScores.teamB}
                 onChange={(e) => setTempScores(prev => ({ ...prev, teamB: e.target.value }))}
