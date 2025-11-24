@@ -1,0 +1,38 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    @apply border-black;
+  }
+  
+  body {
+    @apply bg-white text-black antialiased;
+  }
+}
+
+@layer components {
+  .btn {
+    @apply px-4 py-2 rounded border border-black bg-white text-black font-medium 
+           active:bg-gray-100 transition-colors duration-150 touch-manipulation;
+  }
+  
+  .btn-primary {
+    @apply bg-black text-white active:bg-gray-800;
+  }
+  
+  .tab {
+    @apply px-4 py-3 text-sm font-medium border-b-2 border-transparent 
+           active:bg-gray-50 transition-all touch-manipulation;
+  }
+  
+  .tab-active {
+    @apply border-black;
+  }
+  
+  .skeleton {
+    @apply animate-pulse bg-gray-200 rounded;
+  }
+}
+
