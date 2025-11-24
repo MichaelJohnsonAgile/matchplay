@@ -515,41 +515,28 @@ function CreateGameDayForm({ onClose, onSuccess }) {
   // Step 1: Format Selection
   if (step === 1) {
     return (
-      <div className="space-y-6">
+      <div className="space-y-4">
         <div className="text-center mb-6">
           <h3 className="text-lg font-semibold mb-2">Choose Game Format</h3>
-          <p className="text-sm text-gray-600">Select how you want to organize this game day</p>
         </div>
 
-        <div className="grid grid-cols-1 gap-4">
+        <div className="grid grid-cols-1 gap-3">
           {/* Group Format Card */}
           <button
             type="button"
             onClick={() => handleFormatSelect('group')}
-            className="border-2 border-gray-200 hover:border-[#377850] p-6 text-left transition-all rounded-lg group"
+            className="border-2 border-gray-200 hover:border-[#377850] p-4 text-left transition-all rounded-lg group"
           >
-            <div className="flex items-start gap-4">
-              <div className="flex-shrink-0 w-12 h-12 bg-[#377850] bg-opacity-10 rounded-lg flex items-center justify-center group-hover:bg-opacity-20 transition-colors">
-                <svg className="w-6 h-6 text-[#377850]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                </svg>
-              </div>
-              <div className="flex-1">
-                <h4 className="font-semibold text-lg mb-2">Group (Courts)</h4>
-                <p className="text-sm text-gray-600 mb-3">
-                  Traditional format with skill-based groups across multiple courts. Players rotate within and between groups based on performance.
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="font-semibold text-lg mb-1">Group (Courts)</h4>
+                <p className="text-sm text-gray-600">
+                  Traditional format with skill-based groups and movement between rounds
                 </p>
-                <ul className="text-sm text-gray-500 space-y-1">
-                  <li>• Multiple rounds with movement</li>
-                  <li>• 4-5 players per group</li>
-                  <li>• Round robin within groups</li>
-                </ul>
               </div>
-              <div className="flex-shrink-0">
-                <svg className="w-6 h-6 text-gray-400 group-hover:text-[#377850]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
-              </div>
+              <svg className="w-5 h-5 text-gray-400 group-hover:text-[#377850] flex-shrink-0 ml-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
             </div>
           </button>
 
@@ -557,30 +544,18 @@ function CreateGameDayForm({ onClose, onSuccess }) {
           <button
             type="button"
             onClick={() => handleFormatSelect('teams')}
-            className="border-2 border-gray-200 hover:border-blue-500 p-6 text-left transition-all rounded-lg group"
+            className="border-2 border-gray-200 hover:border-blue-500 p-4 text-left transition-all rounded-lg group"
           >
-            <div className="flex items-start gap-4">
-              <div className="flex-shrink-0 w-12 h-12 bg-blue-500 bg-opacity-10 rounded-lg flex items-center justify-center group-hover:bg-opacity-20 transition-colors">
-                <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                </svg>
-              </div>
-              <div className="flex-1">
-                <h4 className="font-semibold text-lg mb-2">Teams</h4>
-                <p className="text-sm text-gray-600 mb-3">
-                  Blue vs Red team competition. Each player partners with all their teammates to compete against other teams.
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="font-semibold text-lg mb-1">Teams</h4>
+                <p className="text-sm text-gray-600">
+                  Blue vs Red team competition with team leaderboard
                 </p>
-                <ul className="text-sm text-gray-500 space-y-1">
-                  <li>• 2 or 4 teams</li>
-                  <li>• 4-5 players per team</li>
-                  <li>• Team leaderboard with KPIs</li>
-                </ul>
               </div>
-              <div className="flex-shrink-0">
-                <svg className="w-6 h-6 text-gray-400 group-hover:text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
-              </div>
+              <svg className="w-5 h-5 text-gray-400 group-hover:text-blue-500 flex-shrink-0 ml-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
             </div>
           </button>
         </div>
