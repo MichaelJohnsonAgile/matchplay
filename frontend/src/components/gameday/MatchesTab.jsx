@@ -17,7 +17,7 @@ export default function MatchesTab({ gameDayId, gameDay }) {
   const [alertModal, setAlertModal] = useState({ isOpen: false, title: '', message: '', type: 'info' })
   
   // Check if draw has been generated
-  const hasMatches = gameDay?.matches && gameDay.matches.length > 0
+  const hasMatches = gameDay?.matchCount > 0
   
   useEffect(() => {
     console.log('MatchesTab useEffect - hasMatches:', hasMatches, 'gameDayId:', gameDayId)
@@ -26,7 +26,7 @@ export default function MatchesTab({ gameDayId, gameDay }) {
     } else {
       setIsLoading(false)
     }
-  }, [gameDayId, hasMatches, gameDay?.matches?.length])
+  }, [gameDayId, hasMatches])
 
   const loadData = async () => {
     try {

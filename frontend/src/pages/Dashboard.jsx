@@ -137,7 +137,19 @@ export default function Dashboard() {
     }
   }
 
-  const getStatusText = (status) => {
+  const getStatusText = (status, date) => {
+    // Check if date is today
+    if (status === 'upcoming') {
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      const gameDate = new Date(date)
+      gameDate.setHours(0, 0, 0, 0)
+      
+      if (gameDate.getTime() === today.getTime()) {
+        return 'Today'
+      }
+    }
+    
     switch (status) {
       case 'in-progress':
         return 'In Progress'
@@ -214,11 +226,11 @@ export default function Dashboard() {
                 
                 <div className="flex justify-between items-start mb-2 pr-10">
                   <div>
-                    <h3 className="font-semibold text-lg">{formatGameDayDate(gameDay.date)}</h3>
+                    <h3 className="font-semibold text-base">{formatGameDayDate(gameDay.date)}</h3>
                     <p className="text-sm text-gray-600">{gameDay.venue}</p>
                   </div>
                   <span className={`px-3 py-1 text-xs font-medium border ${getStatusColor(gameDay.status)}`}>
-                    {getStatusText(gameDay.status)}
+                    {getStatusText(gameDay.status, gameDay.date)}
                   </span>
                 </div>
                 <div className="flex gap-4 text-sm text-gray-600">
