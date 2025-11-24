@@ -9,9 +9,15 @@ if (!process.env.DATABASE_URL) {
 }
 
 // Database connection configuration
+// Enable SSL if connecting to external database (Render requires SSL)
+const isExternalDB = process.env.DATABASE_URL && 
+  (process.env.DATABASE_URL.includes('render.com') || 
+   process.env.DATABASE_URL.includes('amazonaws.com') ||
+   process.env.NODE_ENV === 'production')
+
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === 'production' ? {
+  ssl: isExternalDB ? {
     rejectUnauthorized: false
   } : false,
   max: 20, // Maximum number of clients in the pool
