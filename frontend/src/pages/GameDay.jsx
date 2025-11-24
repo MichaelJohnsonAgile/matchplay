@@ -89,7 +89,7 @@ export default function GameDay() {
     },
     {
       label: 'Matches',
-      content: <MatchesTab gameDayId={id} gameDay={gameDay} />,
+      content: <MatchesTab gameDayId={id} gameDay={gameDay} isAdminMode={isAdminMode} />,
       disabled: !hasMatches
     }
   ]
