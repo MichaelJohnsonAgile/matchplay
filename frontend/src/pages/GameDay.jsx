@@ -5,7 +5,6 @@ import Modal from '../components/Modal'
 import AthletesTab from '../components/gameday/AthletesTab'
 import MatchesTab from '../components/gameday/MatchesTab'
 import { TeamsTab } from '../components/gameday/TeamsTab'
-import { TeamLeaderboard } from '../components/gameday/TeamLeaderboard'
 import { gameDayAPI } from '../services/api'
 import { formatGameDayDate } from '../utils/dateFormat'
 import { useAdminMode, useNavigateWithAdmin } from '../hooks/useAdminMode'
@@ -146,7 +145,7 @@ export default function GameDay() {
     }
   ]
   
-  // Add Teams tab for teams mode
+  // Add Teams tab for teams mode (combines teams + leaderboard)
   if (isTeamsMode) {
     tabs.push({
       label: 'Teams',
@@ -161,15 +160,6 @@ export default function GameDay() {
     content: <MatchesTab gameDayId={id} gameDay={gameDay} isAdminMode={isAdminMode} />,
     disabled: !hasMatches
   })
-  
-  // Add Leaderboard tab (different content for teams vs groups)
-  if (isTeamsMode) {
-    tabs.push({
-      label: 'Leaderboard',
-      content: <TeamLeaderboard gameDayId={id} />,
-      disabled: !hasMatches
-    })
-  }
 
   return (
     <div className="min-h-screen bg-white">
