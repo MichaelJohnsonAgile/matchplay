@@ -277,13 +277,23 @@ export default function Dashboard() {
                     {getStatusText(gameDay.status, gameDay.date)}
                   </span>
                 </div>
-                <div className="flex gap-4 text-sm text-gray-600">
+                <div className="flex gap-4 text-sm text-gray-600 mb-3">
                   <span>{gameDay.athleteCount} Athletes</span>
                   <span>•</span>
                   <span>{gameDay.matchCount} Matches</span>
                   <span>•</span>
                   <span>{gameDay.rounds} Rounds</span>
                 </div>
+                {isHighlighted && (
+                  <div className="flex justify-end">
+                    <span className="inline-flex items-center text-sm font-medium text-[#377850]">
+                      Go to Game Day
+                      <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </span>
+                  </div>
+                )}
               </div>
             )
             })}
