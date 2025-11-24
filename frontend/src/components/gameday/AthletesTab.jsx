@@ -205,8 +205,9 @@ export default function AthletesTab({ gameDayId, gameDay, onUpdate, isAdminMode 
     }
   }
   
-  // Check if draw has been generated (matches exist)
-  const hasMatches = gameDay?.matches && gameDay.matches.length > 0
+  // Check if draw has been generated AND any scores have been entered
+  const hasMatchesWithScores = gameDay?.matches && gameDay.matches.length > 0 && 
+    gameDay.matches.some(m => m.teamA?.score !== null && m.teamB?.score !== null)
   
   return (
     <div className="space-y-4">
@@ -215,7 +216,7 @@ export default function AthletesTab({ gameDayId, gameDay, onUpdate, isAdminMode 
         <div className="flex gap-2">
           {isAdminMode && (
             <>
-              {hasMatches ? (
+              {hasMatchesWithScores ? (
                 <button 
                   className="bg-red-600 text-white px-4 py-2 text-sm font-medium hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
                   onClick={handleCancelDraw}
@@ -227,7 +228,8 @@ export default function AthletesTab({ gameDayId, gameDay, onUpdate, isAdminMode 
                 <button 
                   className="bg-[#377850] text-white px-4 py-2 text-sm font-medium hover:bg-[#2a5f3c] disabled:bg-gray-400 disabled:cursor-not-allowed"
                   onClick={handleGenerateDraw}
-                  disabled={isGenerating}
+                  disabled={isGenerating || gameDayAthletes.length < 8}
+                  title={gameDayAthletes.length < 8 ? 'Need at least 8 athletes to generate draw' : ''}
                 >
                   {isGenerating ? 'Generating...' : 'Generate Draw'}
                 </button>
@@ -237,10 +239,10 @@ export default function AthletesTab({ gameDayId, gameDay, onUpdate, isAdminMode 
           <button 
             className="bg-[#377850] text-white px-4 py-2 text-sm font-medium hover:bg-[#2a5f3c] disabled:bg-gray-400 disabled:cursor-not-allowed"
             onClick={() => setIsAddModalOpen(true)}
-            disabled={hasMatches}
-            title={hasMatches ? 'Draw already generated - cannot add athletes' : 'Add yourself to this game day'}
+            disabled={hasMatchesWithScores}
+            title={hasMatchesWithScores ? 'Scores entered - cannot add athletes' : 'Add yourself to this game day'}
           >
-            {hasMatches ? 'Draw Locked' : 'Join Game Day'}
+            {hasMatchesWithScores ? 'Draw Locked' : 'Join Game Day'}
           </button>
         </div>
       </div>
@@ -328,8 +330,8 @@ export default function AthletesTab({ gameDayId, gameDay, onUpdate, isAdminMode 
                           <button 
                             onClick={() => handleDeleteAthlete(athlete.id)}
                             className="text-red-600 hover:bg-red-50 p-1 rounded transition-colors disabled:text-gray-400 disabled:cursor-not-allowed disabled:hover:bg-transparent"
-                            disabled={hasMatches}
-                            title={hasMatches ? 'Cannot remove athletes after draw is generated' : 'Remove athlete'}
+                            disabled={hasMatchesWithScores}
+                            title={hasMatchesWithScores ? 'Cannot remove athletes after scores are entered' : 'Remove athlete'}
                           >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
