@@ -451,6 +451,7 @@ export default function Dashboard() {
 
 function CreateGameDayForm({ onClose, onSuccess }) {
   const navigate = useNavigateWithAdmin()
+  const [step, setStep] = useState(1) // 1 = format selection, 2 = settings
   const [formData, setFormData] = useState({
     date: '',
     venue: 'Evolve North Narrabeen',
@@ -470,6 +471,21 @@ function CreateGameDayForm({ onClose, onSuccess }) {
       ...prev,
       [name]: type === 'number' ? parseInt(value) : value
     }))
+  }
+
+  const handleFormatSelect = (format) => {
+    setFormData(prev => ({
+      ...prev,
+      format,
+      // Set appropriate defaults based on format
+      pointsToWin: format === 'teams' ? 7 : 11
+    }))
+    setStep(2)
+  }
+
+  const handleBack = () => {
+    setStep(1)
+    setError(null)
   }
 
   const handleSubmit = async (e) => {
@@ -496,6 +512,93 @@ function CreateGameDayForm({ onClose, onSuccess }) {
     }
   }
 
+  // Step 1: Format Selection
+  if (step === 1) {
+    return (
+      <div className="space-y-6">
+        <div className="text-center mb-6">
+          <h3 className="text-lg font-semibold mb-2">Choose Game Format</h3>
+          <p className="text-sm text-gray-600">Select how you want to organize this game day</p>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4">
+          {/* Group Format Card */}
+          <button
+            type="button"
+            onClick={() => handleFormatSelect('group')}
+            className="border-2 border-gray-200 hover:border-[#377850] p-6 text-left transition-all rounded-lg group"
+          >
+            <div className="flex items-start gap-4">
+              <div className="flex-shrink-0 w-12 h-12 bg-[#377850] bg-opacity-10 rounded-lg flex items-center justify-center group-hover:bg-opacity-20 transition-colors">
+                <svg className="w-6 h-6 text-[#377850]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                </svg>
+              </div>
+              <div className="flex-1">
+                <h4 className="font-semibold text-lg mb-2">Group (Courts)</h4>
+                <p className="text-sm text-gray-600 mb-3">
+                  Traditional format with skill-based groups across multiple courts. Players rotate within and between groups based on performance.
+                </p>
+                <ul className="text-sm text-gray-500 space-y-1">
+                  <li>• Multiple rounds with movement</li>
+                  <li>• 4-5 players per group</li>
+                  <li>• Round robin within groups</li>
+                </ul>
+              </div>
+              <div className="flex-shrink-0">
+                <svg className="w-6 h-6 text-gray-400 group-hover:text-[#377850]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </div>
+            </div>
+          </button>
+
+          {/* Teams Format Card */}
+          <button
+            type="button"
+            onClick={() => handleFormatSelect('teams')}
+            className="border-2 border-gray-200 hover:border-blue-500 p-6 text-left transition-all rounded-lg group"
+          >
+            <div className="flex items-start gap-4">
+              <div className="flex-shrink-0 w-12 h-12 bg-blue-500 bg-opacity-10 rounded-lg flex items-center justify-center group-hover:bg-opacity-20 transition-colors">
+                <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                </svg>
+              </div>
+              <div className="flex-1">
+                <h4 className="font-semibold text-lg mb-2">Teams</h4>
+                <p className="text-sm text-gray-600 mb-3">
+                  Blue vs Red team competition. Each player partners with all their teammates to compete against other teams.
+                </p>
+                <ul className="text-sm text-gray-500 space-y-1">
+                  <li>• 2 or 4 teams</li>
+                  <li>• 4-5 players per team</li>
+                  <li>• Team leaderboard with KPIs</li>
+                </ul>
+              </div>
+              <div className="flex-shrink-0">
+                <svg className="w-6 h-6 text-gray-400 group-hover:text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </div>
+            </div>
+          </button>
+        </div>
+
+        <div className="flex gap-2 pt-4">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex-1 border border-gray-200 px-4 py-2 text-sm font-medium"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // Step 2: Settings Configuration
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       {error && (
@@ -503,6 +606,23 @@ function CreateGameDayForm({ onClose, onSuccess }) {
           {error}
         </div>
       )}
+
+      {/* Format indicator */}
+      <div className="bg-gray-50 p-3 rounded border border-gray-200 flex items-center justify-between">
+        <div>
+          <span className="text-sm font-medium">Format: </span>
+          <span className={`text-sm font-semibold ${formData.format === 'teams' ? 'text-blue-600' : 'text-[#377850]'}`}>
+            {formData.format === 'teams' ? 'Teams' : 'Group (Courts)'}
+          </span>
+        </div>
+        <button
+          type="button"
+          onClick={handleBack}
+          className="text-sm text-gray-600 hover:text-gray-900 underline"
+        >
+          Change
+        </button>
+      </div>
       
       <div>
         <label className="block text-sm font-medium mb-1">
@@ -533,44 +653,25 @@ function CreateGameDayForm({ onClose, onSuccess }) {
         />
       </div>
 
-      <div className="border-t border-gray-200 pt-4">
-        <h3 className="font-semibold mb-3">Game Format</h3>
-        
+      {formData.format === 'teams' && (
         <div>
           <label className="block text-sm font-medium mb-1">
-            Format
+            Number of Teams
           </label>
           <select
-            name="format"
-            value={formData.format}
+            name="numberOfTeams"
+            value={formData.numberOfTeams}
             onChange={handleChange}
             className="w-full border border-gray-200 px-3 py-2 text-sm"
           >
-            <option value="group">Group (Courts)</option>
-            <option value="teams">Teams</option>
+            <option value="2">2 Teams (Blue vs Red)</option>
+            <option value="4">4 Teams (Blue, Red, Green, Yellow)</option>
           </select>
+          <p className="text-xs text-gray-500 mt-1">
+            Min 4 players per team, max 5 players per team
+          </p>
         </div>
-
-        {formData.format === 'teams' && (
-          <div className="mt-4">
-            <label className="block text-sm font-medium mb-1">
-              Number of Teams
-            </label>
-            <select
-              name="numberOfTeams"
-              value={formData.numberOfTeams}
-              onChange={handleChange}
-              className="w-full border border-gray-200 px-3 py-2 text-sm"
-            >
-              <option value="2">2 Teams (Blue vs Red)</option>
-              <option value="4">4 Teams (Blue vs Red vs Green vs Yellow)</option>
-            </select>
-            <p className="text-xs text-gray-500 mt-1">
-              Min 4 players per team, max 5 players per team
-            </p>
-          </div>
-        )}
-      </div>
+      )}
 
       <div className="border-t border-gray-200 pt-4">
         <h3 className="font-semibold mb-3">Scoring Rules</h3>
@@ -647,28 +748,20 @@ function CreateGameDayForm({ onClose, onSuccess }) {
         </>
       )}
 
-      {formData.format === 'teams' && (
-        <div className="bg-blue-50 border border-blue-200 p-3 text-sm">
-          <p className="text-blue-800">
-            Teams mode: Athletes will be split into balanced teams. Each person partners with their teammates against other teams.
-          </p>
-        </div>
-      )}
-
-      <div className="flex gap-2 pt-4">
+      <div className="flex gap-2 pt-4 border-t border-gray-200">
         <button
           type="button"
-          onClick={onClose}
-          className="flex-1 border border-gray-200 px-4 py-2 text-sm font-medium"
+          onClick={handleBack}
+          className="border border-gray-200 px-4 py-2 text-sm font-medium"
         >
-          Cancel
+          Back
         </button>
         <button
           type="submit"
           disabled={isSubmitting}
           className="flex-1 bg-[#377850] text-white px-4 py-2 text-sm font-medium disabled:bg-gray-400"
         >
-          {isSubmitting ? 'Creating...' : 'Create'}
+          {isSubmitting ? 'Creating...' : 'Create Game Day'}
         </button>
       </div>
     </form>
