@@ -420,7 +420,7 @@ export async function getGameDayAthleteStats(gameDayId, athleteId) {
       AND (m.team_a_player1 = $2 OR m.team_a_player2 = $2 OR m.team_b_player1 = $2 OR m.team_b_player2 = $2)
       AND m.team_a_score IS NOT NULL 
       AND m.team_b_score IS NOT NULL
-      AND m.bye_athlete != $2
+      AND (m.bye_athlete IS NULL OR m.bye_athlete != $2)
   `, [gameDayId, athleteId])
   
   const row = result.rows[0]
