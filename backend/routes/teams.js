@@ -23,23 +23,11 @@ teamsRoutes.post('/:id/teams/generate', async (req, res) => {
     const numAthletes = athletes.length
     const numberOfTeams = gameDay.number_of_teams
     
-    // Validate athlete count
-    const minAthletes = numberOfTeams * 4
-    const maxAthletes = numberOfTeams * 5
-    
-    if (numAthletes < minAthletes) {
+    // Basic validation - need at least 2 athletes
+    if (numAthletes < 2) {
       return res.status(400).json({
-        error: `Need at least ${minAthletes} athletes for ${numberOfTeams} teams`,
-        currentCount: numAthletes,
-        needed: minAthletes - numAthletes
-      })
-    }
-    
-    if (numAthletes > maxAthletes) {
-      return res.status(400).json({
-        error: `Too many athletes. Maximum ${maxAthletes} for ${numberOfTeams} teams (max 5 per team)`,
-        currentCount: numAthletes,
-        max: maxAthletes
+        error: `Need at least 2 athletes to generate teams`,
+        currentCount: numAthletes
       })
     }
     
