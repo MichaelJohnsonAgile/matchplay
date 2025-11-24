@@ -329,34 +329,44 @@ export async function getLeaderboard() {
       a.id,
       a.name,
       a.rank,
-      COUNT(DISTINCT m.id) FILTER (WHERE m.team_a_score IS NOT NULL AND m.team_b_score IS NOT NULL) as matches_played,
-      COUNT(DISTINCT m.id) FILTER (
-        WHERE (m.winner = 'teamA' AND (m.team_a_player1 = a.id OR m.team_a_player2 = a.id))
+      COUNT(DISTINCT CASE 
+        WHEN m.team_a_score IS NOT NULL AND m.team_b_score IS NOT NULL 
+        THEN m.id 
+        ELSE NULL 
+      END) as matches_played,
+      COUNT(DISTINCT CASE 
+        WHEN (m.winner = 'teamA' AND (m.team_a_player1 = a.id OR m.team_a_player2 = a.id))
            OR (m.winner = 'teamB' AND (m.team_b_player1 = a.id OR m.team_b_player2 = a.id))
-      ) as wins,
-      COUNT(DISTINCT m.id) FILTER (
-        WHERE (m.winner = 'teamB' AND (m.team_a_player1 = a.id OR m.team_a_player2 = a.id))
+        THEN m.id 
+        ELSE NULL 
+      END) as wins,
+      COUNT(DISTINCT CASE 
+        WHEN (m.winner = 'teamB' AND (m.team_a_player1 = a.id OR m.team_a_player2 = a.id))
            OR (m.winner = 'teamA' AND (m.team_b_player1 = a.id OR m.team_b_player2 = a.id))
-      ) as losses,
+        THEN m.id 
+        ELSE NULL 
+      END) as losses,
       COALESCE(SUM(
         CASE 
-          WHEN m.team_a_player1 = a.id OR m.team_a_player2 = a.id THEN m.team_a_score
-          WHEN m.team_b_player1 = a.id OR m.team_b_player2 = a.id THEN m.team_b_score
+          WHEN m.team_a_score IS NOT NULL AND (m.team_a_player1 = a.id OR m.team_a_player2 = a.id) THEN m.team_a_score
+          WHEN m.team_b_score IS NOT NULL AND (m.team_b_player1 = a.id OR m.team_b_player2 = a.id) THEN m.team_b_score
           ELSE 0
         END
       ), 0) as points_for,
       COALESCE(SUM(
         CASE 
-          WHEN m.team_a_player1 = a.id OR m.team_a_player2 = a.id THEN m.team_b_score
-          WHEN m.team_b_player1 = a.id OR m.team_b_player2 = a.id THEN m.team_a_score
+          WHEN m.team_a_score IS NOT NULL AND (m.team_a_player1 = a.id OR m.team_a_player2 = a.id) THEN m.team_b_score
+          WHEN m.team_b_score IS NOT NULL AND (m.team_b_player1 = a.id OR m.team_b_player2 = a.id) THEN m.team_a_score
           ELSE 0
         END
       ), 0) as points_against
     FROM athletes a
     LEFT JOIN matches m ON (
-      m.team_a_player1 = a.id OR m.team_a_player2 = a.id OR
-      m.team_b_player1 = a.id OR m.team_b_player2 = a.id
-    ) AND m.team_a_score IS NOT NULL AND m.team_b_score IS NOT NULL
+      (m.team_a_player1 = a.id OR m.team_a_player2 = a.id OR
+       m.team_b_player1 = a.id OR m.team_b_player2 = a.id)
+      AND m.team_a_score IS NOT NULL 
+      AND m.team_b_score IS NOT NULL
+    )
     GROUP BY a.id, a.name, a.rank
     ORDER BY wins DESC, (points_for - points_against) DESC, points_for DESC
   `)
@@ -366,13 +376,13 @@ export async function getLeaderboard() {
     name: row.name,
     rank: row.rank,
     stats: {
-      matchesPlayed: parseInt(row.matches_played),
-      wins: parseInt(row.wins),
-      losses: parseInt(row.losses),
-      pointsFor: parseInt(row.points_for),
-      pointsAgainst: parseInt(row.points_against),
-      pointsDiff: parseInt(row.points_for) - parseInt(row.points_against),
-      winPercentage: row.matches_played > 0 ? (row.wins / row.matches_played) * 100 : 0
+      matchesPlayed: parseInt(row.matches_played) || 0,
+      wins: parseInt(row.wins) || 0,
+      losses: parseInt(row.losses) || 0,
+      pointsFor: parseInt(row.points_for) || 0,
+      pointsAgainst: parseInt(row.points_against) || 0,
+      pointsDiff: (parseInt(row.points_for) || 0) - (parseInt(row.points_against) || 0),
+      winPercentage: row.matches_played > 0 ? ((parseInt(row.wins) || 0) / parseInt(row.matches_played)) * 100 : 0
     }
   }))
 }

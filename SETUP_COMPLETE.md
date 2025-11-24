@@ -51,7 +51,7 @@ Render will automatically redeploy your backend with the new code.
 1. Go to https://dashboard.render.com
 2. Click **"New +"** → **"PostgreSQL"**
 3. Settings:
-   - **Name**: `matchplay-db`
+   - **Name**: `matchplay-data`
    - **Database**: `matchplay`
    - **Region**: **Same as your backend** (e.g., Oregon)
    - **Instance Type**: **Free**

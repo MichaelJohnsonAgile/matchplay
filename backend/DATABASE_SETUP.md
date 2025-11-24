@@ -18,7 +18,7 @@ This guide will help you migrate from the in-memory data store to PostgreSQL on 
 1. Log in to your [Render Dashboard](https://dashboard.render.com/)
 2. Click **"New +"** button → Select **"PostgreSQL"**
 3. Configure your database:
-   - **Name**: `matchplay-db` (or your preferred name)
+   - **Name**: `matchplay-data` (or your preferred name)
    - **Database**: `matchplay`
    - **User**: Auto-generated
    - **Region**: Choose same region as your backend service

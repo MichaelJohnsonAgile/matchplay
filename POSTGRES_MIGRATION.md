@@ -45,7 +45,7 @@ backend/
 ### 1. Create PostgreSQL Database
 ```
 Render Dashboard → New + → PostgreSQL
-- Name: matchplay-db
+- Name: matchplay-data
 - Region: Same as backend
 - Tier: Free
 ```

@@ -148,7 +148,7 @@ Adding PostgreSQL gives you **persistent data storage**.
 1. Go to Render Dashboard
 2. Click **"New +"** → **"PostgreSQL"**
 3. Configure:
-   - **Name**: `matchplay-db`
+   - **Name**: `matchplay-data`
    - **Database**: `matchplay`
    - **Region**: **Same as your backend** (important!)
    - **Instance Type**: **Free**

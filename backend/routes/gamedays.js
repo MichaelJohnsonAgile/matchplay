@@ -15,7 +15,7 @@ gameDayRoutes.get('/', async (req, res) => {
         const stats = await db.getGameDayStats(gd.id)
         return {
           id: gd.id,
-          date: gd.date,
+          date: gd.date instanceof Date ? gd.date.toISOString().split('T')[0] : gd.date,
           venue: gd.venue,
           status: gd.status,
           settings: {
@@ -49,7 +49,7 @@ gameDayRoutes.get('/:id', async (req, res) => {
     
     const gameDayWithStats = {
       id: gameDay.id,
-      date: gameDay.date,
+      date: gameDay.date instanceof Date ? gameDay.date.toISOString().split('T')[0] : gameDay.date,
       venue: gameDay.venue,
       status: gameDay.status,
       settings: {
@@ -92,20 +92,20 @@ gameDayRoutes.post('/', async (req, res) => {
     
     const stats = await db.getGameDayStats(newGameDay.id)
     
-    res.status(201).json({
-      id: newGameDay.id,
-      date: newGameDay.date,
-      venue: newGameDay.venue,
-      status: newGameDay.status,
-      settings: {
-        format: newGameDay.format,
-        pointsToWin: newGameDay.points_to_win,
-        winByMargin: newGameDay.win_by_margin,
-        numberOfRounds: newGameDay.number_of_rounds,
-        movementRule: newGameDay.movement_rule
-      },
-      ...stats
-    })
+  res.status(201).json({
+    id: newGameDay.id,
+    date: newGameDay.date instanceof Date ? newGameDay.date.toISOString().split('T')[0] : newGameDay.date,
+    venue: newGameDay.venue,
+    status: newGameDay.status,
+    settings: {
+      format: newGameDay.format,
+      pointsToWin: newGameDay.points_to_win,
+      winByMargin: newGameDay.win_by_margin,
+      numberOfRounds: newGameDay.number_of_rounds,
+      movementRule: newGameDay.movement_rule
+    },
+    ...stats
+  })
   } catch (error) {
     console.error('Error creating game day:', error)
     res.status(500).json({ error: 'Failed to create game day' })
@@ -122,7 +122,7 @@ gameDayRoutes.put('/:id', async (req, res) => {
     
     res.json({
       id: updatedGameDay.id,
-      date: updatedGameDay.date,
+      date: updatedGameDay.date instanceof Date ? updatedGameDay.date.toISOString().split('T')[0] : updatedGameDay.date,
       venue: updatedGameDay.venue,
       status: updatedGameDay.status,
       settings: {
