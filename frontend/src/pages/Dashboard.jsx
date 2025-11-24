@@ -5,9 +5,10 @@ import { ConfirmModal, AlertModal } from '../components/Alert'
 import Skeleton from '../components/Skeleton'
 import { gameDayAPI, leaderboardAPI, athleteAPI } from '../services/api'
 import { formatGameDayDate } from '../utils/dateFormat'
+import { useAdminMode, useNavigateWithAdmin } from '../hooks/useAdminMode'
 
 export default function Dashboard() {
-  const navigate = useNavigate()
+  const navigate = useNavigateWithAdmin()
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [isAthleteModalOpen, setIsAthleteModalOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
@@ -18,8 +19,7 @@ export default function Dashboard() {
   const [error, setError] = useState(null)
   
   // Check if admin mode is enabled via URL parameter
-  const searchParams = new URLSearchParams(window.location.search)
-  const isAdminMode = searchParams.get('admin') === 'true'
+  const isAdminMode = useAdminMode()
   
   // Alert and confirm modals
   const [alertModal, setAlertModal] = useState({ isOpen: false, title: '', message: '', type: 'info' })
@@ -437,7 +437,7 @@ export default function Dashboard() {
 }
 
 function CreateGameDayForm({ onClose, onSuccess }) {
-  const navigate = useNavigate()
+  const navigate = useNavigateWithAdmin()
   const [formData, setFormData] = useState({
     date: '',
     venue: 'Evolve North Narrabeen',

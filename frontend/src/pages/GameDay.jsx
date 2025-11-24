@@ -6,10 +6,11 @@ import AthletesTab from '../components/gameday/AthletesTab'
 import MatchesTab from '../components/gameday/MatchesTab'
 import { gameDayAPI } from '../services/api'
 import { formatGameDayDate } from '../utils/dateFormat'
+import { useAdminMode, useNavigateWithAdmin } from '../hooks/useAdminMode'
 
 export default function GameDay() {
   const { id } = useParams()
-  const navigate = useNavigate()
+  const navigate = useNavigateWithAdmin()
   const [gameDay, setGameDay] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -17,8 +18,7 @@ export default function GameDay() {
   const [isDeleting, setIsDeleting] = useState(false)
   
   // Check if admin mode is enabled via URL parameter
-  const searchParams = new URLSearchParams(window.location.search)
-  const isAdminMode = searchParams.get('admin') === 'true'
+  const isAdminMode = useAdminMode()
   
   useEffect(() => {
     loadGameDay()
