@@ -46,7 +46,7 @@ export default function AthletesTab({ gameDayId, gameDay, onUpdate, isAdminMode 
       setAlertModal({
         isOpen: true,
         title: 'Success',
-        message: `Successfully added ${selectedAthletes.length} athlete${selectedAthletes.length > 1 ? 's' : ''} to game day`,
+        message: `Successfully joined the game day! ${selectedAthletes.length > 1 ? `${selectedAthletes.length} players added.` : ''}`,
         type: 'success'
       })
     } catch (err) {
@@ -212,35 +212,37 @@ export default function AthletesTab({ gameDayId, gameDay, onUpdate, isAdminMode 
     <div className="space-y-4">
       <div className="flex justify-between items-center flex-wrap gap-2">
         <h2 className="text-xl font-semibold">Athletes</h2>
-        {isAdminMode && (
-          <div className="flex gap-2">
-            {hasMatches ? (
-              <button 
-                className="bg-red-600 text-white px-4 py-2 text-sm font-medium hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
-                onClick={handleCancelDraw}
-                disabled={isGenerating}
-              >
-                {isGenerating ? 'Cancelling...' : 'Cancel Draw'}
-              </button>
-            ) : (
-              <button 
-                className="bg-[#377850] text-white px-4 py-2 text-sm font-medium hover:bg-[#2a5f3c] disabled:bg-gray-400 disabled:cursor-not-allowed"
-                onClick={handleGenerateDraw}
-                disabled={isGenerating}
-              >
-                {isGenerating ? 'Generating...' : 'Generate Draw'}
-              </button>
-            )}
-            <button 
-              className="bg-[#377850] text-white px-4 py-2 text-sm font-medium hover:bg-[#2a5f3c] disabled:bg-gray-400 disabled:cursor-not-allowed"
-              onClick={() => setIsAddModalOpen(true)}
-              disabled={hasMatches}
-              title={hasMatches ? 'Cancel draw first to add athletes' : ''}
-            >
-              Add +
-            </button>
-          </div>
-        )}
+        <div className="flex gap-2">
+          {isAdminMode && (
+            <>
+              {hasMatches ? (
+                <button 
+                  className="bg-red-600 text-white px-4 py-2 text-sm font-medium hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                  onClick={handleCancelDraw}
+                  disabled={isGenerating}
+                >
+                  {isGenerating ? 'Cancelling...' : 'Cancel Draw'}
+                </button>
+              ) : (
+                <button 
+                  className="bg-[#377850] text-white px-4 py-2 text-sm font-medium hover:bg-[#2a5f3c] disabled:bg-gray-400 disabled:cursor-not-allowed"
+                  onClick={handleGenerateDraw}
+                  disabled={isGenerating}
+                >
+                  {isGenerating ? 'Generating...' : 'Generate Draw'}
+                </button>
+              )}
+            </>
+          )}
+          <button 
+            className="bg-[#377850] text-white px-4 py-2 text-sm font-medium hover:bg-[#2a5f3c] disabled:bg-gray-400 disabled:cursor-not-allowed"
+            onClick={() => setIsAddModalOpen(true)}
+            disabled={hasMatches}
+            title={hasMatches ? 'Draw already generated - cannot add athletes' : 'Add yourself to this game day'}
+          >
+            {hasMatches ? 'Draw Locked' : 'Join Game Day'}
+          </button>
+        </div>
       </div>
       
       <div className="p-4">
@@ -294,7 +296,7 @@ export default function AthletesTab({ gameDayId, gameDay, onUpdate, isAdminMode 
               ) : gameDayAthletes.length === 0 ? (
                 <tr>
                   <td colSpan="9" className="p-8 text-center text-gray-500">
-                    No athletes added yet. Click "Add +" to add athletes to this game day.
+                    No players signed up yet. Click "Join Game Day" to add yourself!
                   </td>
                 </tr>
               ) : (
@@ -346,7 +348,7 @@ export default function AthletesTab({ gameDayId, gameDay, onUpdate, isAdminMode 
       
       {/* Add Athletes Modal */}
       <Modal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)}>
-        <h3 className="text-xl font-semibold mb-4">Add Athletes to Game Day</h3>
+        <h3 className="text-xl font-semibold mb-4">Join This Game Day</h3>
         
         <div className="space-y-3 max-h-96 overflow-y-auto mb-4">
           {allAthletes
@@ -368,7 +370,7 @@ export default function AthletesTab({ gameDayId, gameDay, onUpdate, isAdminMode 
           ))}
           {allAthletes.filter(athlete => !gameDayAthletes.some(gda => gda.id === athlete.id)).length === 0 && (
             <div className="text-center text-gray-500 py-8">
-              All athletes have been added to this game day.
+              Everyone is already signed up for this game day!
             </div>
           )}
         </div>
@@ -385,7 +387,7 @@ export default function AthletesTab({ gameDayId, gameDay, onUpdate, isAdminMode 
             className="flex-1 bg-[#377850] text-white px-4 py-2 text-sm font-medium disabled:bg-gray-400"
             disabled={selectedAthletes.length === 0}
           >
-            Add {selectedAthletes.length > 0 ? `(${selectedAthletes.length})` : ''}
+            {selectedAthletes.length > 0 ? `Join (${selectedAthletes.length})` : 'Join'}
           </button>
         </div>
       </Modal>

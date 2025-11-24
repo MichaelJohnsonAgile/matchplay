@@ -369,7 +369,7 @@ export async function getLeaderboard() {
     )
     WHERE a.status = 'active'
     GROUP BY a.id, a.name, a.rank
-    ORDER BY 5 DESC, (6 - 7) DESC, 6 DESC
+    ORDER BY a.rank ASC
   `)
   
   return result.rows.map(row => ({
