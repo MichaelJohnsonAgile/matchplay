@@ -529,7 +529,7 @@ function CreateGameDayForm({ onClose, onSuccess }) {
           >
             <div className="flex items-center justify-between">
               <div>
-                <h4 className="font-semibold text-lg mb-1">Group (Courts)</h4>
+                <h4 className="font-semibold text-lg mb-1">Groups</h4>
                 <p className="text-sm text-gray-600">
                   Traditional format with skill-based groups and movement between rounds
                 </p>
@@ -587,7 +587,7 @@ function CreateGameDayForm({ onClose, onSuccess }) {
         <div>
           <span className="text-sm font-medium">Format: </span>
           <span className={`text-sm font-semibold ${formData.format === 'teams' ? 'text-blue-600' : 'text-[#377850]'}`}>
-            {formData.format === 'teams' ? 'Teams' : 'Group (Courts)'}
+            {formData.format === 'teams' ? 'Teams' : 'Groups'}
           </span>
         </div>
         <button
