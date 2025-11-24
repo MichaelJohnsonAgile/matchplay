@@ -134,13 +134,78 @@ Render will automatically redeploy both services when you push!
 
 ---
 
-## Part 4: Verify Deployment
+## Part 4: Add PostgreSQL Database
+
+### Why Add a Database?
+Without a database, all data is stored in memory and will be lost when:
+- The backend service restarts
+- The backend sleeps after 15 minutes of inactivity
+- You redeploy the backend
+
+Adding PostgreSQL gives you **persistent data storage**.
+
+### Step 1: Create PostgreSQL Database
+1. Go to Render Dashboard
+2. Click **"New +"** → **"PostgreSQL"**
+3. Configure:
+   - **Name**: `matchplay-db`
+   - **Database**: `matchplay`
+   - **Region**: **Same as your backend** (important!)
+   - **Instance Type**: **Free**
+4. Click **"Create Database"**
+5. Wait 1-2 minutes for provisioning
+
+### Step 2: Get Database URL
+1. Once created, scroll down to **"Connections"** section
+2. Copy the **Internal Database URL** (starts with `postgresql://`)
+3. It will look like: `postgresql://matchplay_user:xxxxx@dpg-xxxxx-a/matchplay`
+
+### Step 3: Add Database URL to Backend
+1. Go to your **Backend Web Service** (matchplay-backend)
+2. Click **"Environment"** tab on the left
+3. Click **"Add Environment Variable"**
+4. Add:
+   - **Key**: `DATABASE_URL`
+   - **Value**: Paste the **Internal Database URL** you copied
+5. Click **"Save Changes"**
+6. Backend will automatically redeploy
+
+### Step 4: Initialize Database
+After backend redeploys (watch the logs):
+
+**Option A: Via Render Shell** (Recommended)
+1. Go to your backend service
+2. Click **"Shell"** tab
+3. Run:
+   ```bash
+   npm run db:init
+   ```
+4. You should see: ✅ Database schema created successfully
+
+**Option B: Via Local Connection**
+```bash
+cd backend
+$env:DATABASE_URL="your-external-database-url-here"
+npm run db:init
+```
+
+### Step 5: Verify Database Connection
+1. Check backend logs for: `✅ Database connection established`
+2. Test API: `https://matchplay-backend.onrender.com/api/athletes`
+3. Should see 12 sample athletes
+
+**📚 For detailed database setup, see: [backend/DATABASE_SETUP.md](backend/DATABASE_SETUP.md)**
+
+---
+
+## Part 5: Verify Deployment
 
 ### Test Your App
 1. Open your frontend URL: `https://matchplay.onrender.com`
 2. Try creating a game day
 3. Add some athletes
 4. Generate matches
+5. **Refresh the page** - data should persist!
 
 ### Important Notes About Free Tier
 
@@ -164,6 +229,7 @@ After deployment, save these URLs:
 **Frontend**: `https://matchplay.onrender.com`
 **Backend**: `https://matchplay-backend.onrender.com`
 **Backend Health Check**: `https://matchplay-backend.onrender.com/health`
+**Database**: Accessible via Internal URL (in Render dashboard)
 
 ---
 
@@ -178,6 +244,14 @@ After deployment, save these URLs:
 1. Check Render logs in the dashboard
 2. Verify `package.json` has correct start script
 3. Make sure `backend` folder has all dependencies
+4. If using database, verify `DATABASE_URL` is set correctly
+
+### Database Connection Issues
+1. Verify `DATABASE_URL` is the **Internal** URL (not External)
+2. Check database is active in Render dashboard
+3. Ensure backend and database are in **same region**
+4. Check backend logs for connection errors
+5. Try running `npm run db:init` if tables missing
 
 ### Build Fails
 1. Check build logs in Render dashboard
@@ -191,10 +265,13 @@ After deployment, save these URLs:
 **Current Setup: $0/month**
 - Backend: Free tier (sleeps after 15 min)
 - Frontend: Free tier (always on)
-- Storage: In-memory (data resets on backend restart)
+- Database: Free tier PostgreSQL (persistent storage)
 
-**To Add Persistence Later:**
-If you want data to persist, you can add a free PostgreSQL database from Render (also free tier).
+**Database Limits (Free Tier):**
+- 1 GB storage
+- 1 GB RAM
+- 90 days of automatic backups
+- Suitable for small to medium apps
 
 ---
 
@@ -214,7 +291,15 @@ Every time you push to `main` branch:
 1. Test the deployed application thoroughly
 2. Share the URL with your pickleball group
 3. Consider setting up UptimeRobot to prevent backend sleep
-4. Add a database if you want persistent data storage
+4. Monitor database usage in Render dashboard
+5. Set up custom domains (optional, requires paid tier)
+
+## Additional Documentation
+
+- **Database Setup Details**: [backend/DATABASE_SETUP.md](backend/DATABASE_SETUP.md)
+- **Database Module README**: [backend/database/README.md](backend/database/README.md)
+- **Backend README**: [backend/README.md](backend/README.md)
+- **Frontend README**: [frontend/README.md](frontend/README.md)
 
 Need help? Check Render logs in the dashboard or ask for assistance!
 
