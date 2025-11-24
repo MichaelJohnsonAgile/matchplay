@@ -112,7 +112,7 @@ export default function GameDay() {
           >
             ← Back to Dashboard
           </button>
-          {isAdminMode && !hasMatches && (
+          {isAdminMode && (
             <button
               onClick={() => setShowDeleteModal(true)}
               className="border border-red-500 text-red-600 px-3 py-1.5 text-sm font-medium hover:bg-red-50 transition-colors"
@@ -138,10 +138,22 @@ export default function GameDay() {
           <div className="bg-gray-50 border border-gray-200 p-3 text-sm">
             <div className="font-medium">{formatGameDayDate(gameDay.date)}</div>
             <div className="text-gray-600">{gameDay.venue}</div>
+            {hasMatches && (
+              <div className="text-orange-600 font-medium mt-2">
+                ⚠️ {gameDay.matchCount} matches will be deleted
+              </div>
+            )}
           </div>
-          <p className="text-sm text-red-600 font-medium">
-            This action cannot be undone.
-          </p>
+          <div className="bg-red-50 border border-red-200 p-3 rounded">
+            <p className="text-sm text-red-800 font-medium">
+              ⚠️ WARNING: This action cannot be undone.
+            </p>
+            {hasMatches && (
+              <p className="text-sm text-red-700 mt-1">
+                All matches, scores, and athlete registrations will be permanently deleted.
+              </p>
+            )}
+          </div>
           <div className="flex gap-2 pt-2">
             <button
               type="button"
@@ -157,7 +169,7 @@ export default function GameDay() {
               disabled={isDeleting}
               className="flex-1 bg-red-600 text-white px-4 py-2 text-sm font-medium hover:bg-red-700 disabled:bg-gray-400"
             >
-              {isDeleting ? 'Deleting...' : 'Delete Game Day'}
+              {isDeleting ? 'Deleting...' : 'Yes, Delete Everything'}
             </button>
           </div>
         </div>
