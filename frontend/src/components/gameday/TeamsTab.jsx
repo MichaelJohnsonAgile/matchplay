@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react'
-import { Alert } from '../Alert'
 
 const TEAM_COLORS = {
   blue: {
@@ -119,13 +118,16 @@ export function TeamsTab({ gameDayId, settings }) {
         )}
       </div>
       
-      {error && <Alert type="error" message={error} />}
+      {error && (
+        <div className="border border-red-500 bg-red-50 p-4 text-red-800 rounded">
+          {error}
+        </div>
+      )}
       
       {teams.length === 0 && !error && (
-        <Alert 
-          type="info" 
-          message="No teams created yet. Add athletes first, then generate teams."
-        />
+        <div className="border border-blue-500 bg-blue-50 p-4 text-blue-800 rounded">
+          No teams created yet. Add athletes first, then generate teams.
+        </div>
       )}
       
       {/* Team Display */}
