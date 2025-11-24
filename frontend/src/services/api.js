@@ -35,7 +35,19 @@ async function apiRequest(endpoint, options = {}) {
       throw error
     }
     
-    return await response.json()
+    // Handle 204 No Content responses (common for DELETE operations)
+    if (response.status === 204) {
+      return null
+    }
+    
+    // Check if response has content before parsing JSON
+    const contentType = response.headers.get('content-type')
+    if (contentType && contentType.includes('application/json')) {
+      return await response.json()
+    }
+    
+    // If no JSON content, return null
+    return null
   } catch (error) {
     console.error('API Request failed:', error)
     
