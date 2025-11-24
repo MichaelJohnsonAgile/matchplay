@@ -9,15 +9,19 @@ gameDayRoutes.get('/', async (req, res) => {
   try {
     const gameDays = await db.getAllGameDays()
     
-    // Add stats to each game day
+    // Add stats to each game day and auto-update status
     const gameDaysWithStats = await Promise.all(
       gameDays.map(async (gd) => {
         const stats = await db.getGameDayStats(gd.id)
+        
+        // Auto-update status if needed
+        const updatedStatus = await checkAndUpdateGameDayStatus(gd.id, gd.status, gd.date, stats.matchCount)
+        
         return {
           id: gd.id,
           date: gd.date instanceof Date ? gd.date.toISOString().split('T')[0] : gd.date,
           venue: gd.venue,
-          status: gd.status,
+          status: updatedStatus,
           settings: {
             format: gd.format,
             pointsToWin: gd.points_to_win,
@@ -47,11 +51,14 @@ gameDayRoutes.get('/:id', async (req, res) => {
     
     const stats = await db.getGameDayStats(gameDay.id)
     
+    // Auto-update status if needed
+    const updatedStatus = await checkAndUpdateGameDayStatus(gameDay.id, gameDay.status, gameDay.date, stats.matchCount)
+    
     const gameDayWithStats = {
       id: gameDay.id,
       date: gameDay.date instanceof Date ? gameDay.date.toISOString().split('T')[0] : gameDay.date,
       venue: gameDay.venue,
-      status: gameDay.status,
+      status: updatedStatus,
       settings: {
         format: gameDay.format,
         pointsToWin: gameDay.points_to_win,
@@ -502,6 +509,29 @@ gameDayRoutes.get('/:id/leaderboard', async (req, res) => {
 })
 
 // ============= HELPER FUNCTIONS =============
+
+// Helper function to automatically check and update game day status
+async function checkAndUpdateGameDayStatus(gameDayId, currentStatus, gameDate, matchCount) {
+  // If already completed, no need to check
+  if (currentStatus === 'completed') {
+    return currentStatus
+  }
+  
+  // Check if all matches are completed
+  if (matchCount > 0) {
+    const matches = await db.getMatchesByGameDay(gameDayId)
+    const completedMatches = matches.filter(m => m.winner !== null)
+    
+    if (completedMatches.length === matches.length) {
+      // All matches complete - update to completed
+      await db.updateGameDay(gameDayId, { status: 'completed' })
+      console.log(`Auto-updated game day ${gameDayId} to completed (all matches done)`)
+      return 'completed'
+    }
+  }
+  
+  return currentStatus
+}
 
 // Helper function to calculate optimal group allocation
 function calculateGroupAllocation(numAthletes) {
