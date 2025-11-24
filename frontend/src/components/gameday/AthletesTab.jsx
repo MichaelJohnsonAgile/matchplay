@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import Modal from '../Modal'
 import { AlertModal, ConfirmModal } from '../Alert'
-import { athleteAPI, gameDayAPI } from '../../services/api'
+import { athleteAPI, gameDayAPI, matchAPI } from '../../services/api'
 
 export default function AthletesTab({ gameDayId, gameDay, onUpdate, isAdminMode = false }) {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false)
@@ -10,6 +10,7 @@ export default function AthletesTab({ gameDayId, gameDay, onUpdate, isAdminMode 
   const [allAthletes, setAllAthletes] = useState([])
   const [gameDayAthletes, setGameDayAthletes] = useState([])
   const [isLoading, setIsLoading] = useState(true)
+  const [matches, setMatches] = useState([])
   
   // Alert and confirm modals
   const [alertModal, setAlertModal] = useState({ isOpen: false, title: '', message: '', type: 'info' })
@@ -23,14 +24,16 @@ export default function AthletesTab({ gameDayId, gameDay, onUpdate, isAdminMode 
   const loadData = async () => {
     try {
       setIsLoading(true)
-      const [all, gameDay] = await Promise.all([
+      const [all, gameDay, matchesData] = await Promise.all([
         athleteAPI.getAll(),
-        athleteAPI.getForGameDay(gameDayId)
+        athleteAPI.getForGameDay(gameDayId),
+        matchAPI.getForGameDay(gameDayId)
       ])
       setAllAthletes(all)
       setGameDayAthletes(gameDay)
+      setMatches(matchesData)
     } catch (err) {
-      console.error('Failed to load athletes:', err)
+      console.error('Failed to load data:', err)
     } finally {
       setIsLoading(false)
     }
@@ -206,8 +209,8 @@ export default function AthletesTab({ gameDayId, gameDay, onUpdate, isAdminMode 
   }
   
   // Check if draw has been generated AND any scores have been entered
-  const hasMatchesWithScores = gameDay?.matches && gameDay.matches.length > 0 && 
-    gameDay.matches.some(m => m.teamA?.score !== null && m.teamB?.score !== null)
+  const hasMatchesWithScores = matches.length > 0 && 
+    matches.some(m => m.teamA?.score !== null && m.teamB?.score !== null)
   
   return (
     <div className="space-y-4">
