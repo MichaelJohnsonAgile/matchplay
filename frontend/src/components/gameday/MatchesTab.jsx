@@ -400,18 +400,36 @@ export default function MatchesTab({ gameDayId, gameDay, isAdminMode = false }) 
                         // Determine movement arrow (when round is complete)
                         let movementArrow = null
                         if (allMatchesComplete) {
-                          // Top 2 move up (or top 1 for 4-player groups can be simplified to top 2)
-                          if (position <= 2) {
+                          // Get the effective movement rule
+                          const movementRule = gameDay?.settings?.movementRule || 'auto'
+                          const groupSize = groupLeaderboard.length
+                          
+                          // Determine how many move up/down
+                          let moveCount = 1 // default
+                          if (movementRule === '2') {
+                            moveCount = 2
+                          } else if (movementRule === 'auto') {
+                            // Auto: use 2 if any group has 5 players
+                            moveCount = groupSize === 5 ? 2 : 1
+                          }
+                          
+                          // Determine arrow color (white on colored backgrounds)
+                          const isOnColoredBg = (position === 1 || position > groupSize - moveCount)
+                          const upArrowColor = isOnColoredBg ? 'text-white' : 'text-green-600'
+                          const downArrowColor = isOnColoredBg ? 'text-white' : 'text-red-600'
+                          
+                          // Show up arrow for top N players
+                          if (position <= moveCount) {
                             movementArrow = (
-                              <svg className="w-4 h-4 text-green-600 inline-block ml-1" fill="currentColor" viewBox="0 0 20 20">
+                              <svg className={`w-4 h-4 ${upArrowColor} inline-block ml-1`} fill="currentColor" viewBox="0 0 20 20">
                                 <path fillRule="evenodd" d="M5.293 7.707a1 1 0 010-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 01-1.414 1.414L11 5.414V17a1 1 0 11-2 0V5.414L6.707 7.707a1 1 0 01-1.414 0z" clipRule="evenodd" />
                               </svg>
                             )
                           }
-                          // Bottom 2 move down
-                          else if (position >= groupLeaderboard.length - 1) {
+                          // Show down arrow for bottom N players
+                          else if (position > groupSize - moveCount) {
                             movementArrow = (
-                              <svg className="w-4 h-4 text-red-600 inline-block ml-1" fill="currentColor" viewBox="0 0 20 20">
+                              <svg className={`w-4 h-4 ${downArrowColor} inline-block ml-1`} fill="currentColor" viewBox="0 0 20 20">
                                 <path fillRule="evenodd" d="M14.707 12.293a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 111.414-1.414L9 14.586V3a1 1 0 012 0v11.586l2.293-2.293a1 1 0 011.414 0z" clipRule="evenodd" />
                               </svg>
                             )
