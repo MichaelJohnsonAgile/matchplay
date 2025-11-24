@@ -53,6 +53,17 @@ matchRoutes.put('/:id/score', async (req, res) => {
     }
     
     const updatedMatch = await db.updateMatch(req.params.id, updateData)
+    
+    // Check if all matches in the game day are complete
+    const gameDayId = match.gameDayId
+    const allMatches = await db.getMatchesByGameDay(gameDayId)
+    const allComplete = allMatches.length > 0 && allMatches.every(m => m.winner !== null)
+    
+    // Update game day status to completed if all matches are done
+    if (allComplete) {
+      await db.updateGameDay(gameDayId, { status: 'completed' })
+    }
+    
     res.json(updatedMatch)
   } catch (error) {
     console.error('Error updating match score:', error)
