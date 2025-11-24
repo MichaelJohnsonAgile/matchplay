@@ -273,7 +273,16 @@ export default function Dashboard() {
                 
                 <div className="flex justify-between items-start mb-2 pr-10">
                   <div>
-                    <h3 className="font-semibold text-base">{formatGameDayDate(gameDay.date)}</h3>
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-semibold text-base">{formatGameDayDate(gameDay.date)}</h3>
+                      <span className={`px-2 py-0.5 text-xs font-medium rounded ${
+                        gameDay.settings?.format === 'teams' 
+                          ? 'bg-blue-100 text-blue-800' 
+                          : 'bg-gray-100 text-gray-700'
+                      }`}>
+                        {gameDay.settings?.format === 'teams' ? 'Teams' : 'Groups'}
+                      </span>
+                    </div>
                     <p className="text-sm text-gray-600">{gameDay.venue}</p>
                   </div>
                   <span className={`px-3 py-1 text-xs font-medium border ${getStatusColor(gameDay.status)}`}>
