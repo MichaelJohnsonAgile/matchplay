@@ -17,6 +17,10 @@ export default function Dashboard() {
   const [isLoadingLeaderboard, setIsLoadingLeaderboard] = useState(true)
   const [error, setError] = useState(null)
   
+  // Check if admin mode is enabled via URL parameter
+  const searchParams = new URLSearchParams(window.location.search)
+  const isAdminMode = searchParams.get('admin') === 'true'
+  
   // Alert and confirm modals
   const [alertModal, setAlertModal] = useState({ isOpen: false, title: '', message: '', type: 'info' })
   const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: '', message: '', onConfirm: null })
@@ -202,13 +206,15 @@ export default function Dashboard() {
       <main className="p-4">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-lg font-semibold">Game Days</h2>
-          <button
-            onClick={handleCreateGameDay}
-            className="bg-[#377850] text-white w-10 h-10 flex items-center justify-center text-2xl font-light hover:bg-[#2d5f40] transition-colors rounded leading-none"
-            title="Create Game Day"
-          >
-            +
-          </button>
+          {isAdminMode && (
+            <button
+              onClick={handleCreateGameDay}
+              className="bg-[#377850] text-white w-10 h-10 flex items-center justify-center text-2xl font-light hover:bg-[#2d5f40] transition-colors rounded leading-none"
+              title="Create Game Day"
+            >
+              +
+            </button>
+          )}
         </div>
 
         {error && (
@@ -226,12 +232,14 @@ export default function Dashboard() {
         ) : gameDays.length === 0 ? (
           <div className="border border-gray-200 p-8 text-center mb-6">
             <p className="text-gray-600 mb-4">No game days scheduled yet</p>
-            <button
-              onClick={handleCreateGameDay}
-              className="bg-[#377850] text-white px-6 py-3 text-sm font-medium"
-            >
-              Create Your First Game Day
-            </button>
+            {isAdminMode && (
+              <button
+                onClick={handleCreateGameDay}
+                className="bg-[#377850] text-white px-6 py-3 text-sm font-medium"
+              >
+                Create Your First Game Day
+              </button>
+            )}
           </div>
         ) : (
           <div className="space-y-3 mb-4">
@@ -248,15 +256,17 @@ export default function Dashboard() {
                 }`}
               >
                 {/* Delete button */}
-                <button
-                  onClick={(e) => handleDeleteGameDay(e, gameDay.id, gameDay)}
-                  className="absolute top-3 right-3 w-8 h-8 flex items-center justify-center text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors opacity-0 group-hover:opacity-100"
-                  title="Delete game day"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                  </svg>
-                </button>
+                {isAdminMode && (
+                  <button
+                    onClick={(e) => handleDeleteGameDay(e, gameDay.id, gameDay)}
+                    className="absolute top-3 right-3 w-8 h-8 flex items-center justify-center text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors opacity-0 group-hover:opacity-100"
+                    title="Delete game day"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  </button>
+                )}
                 
                 <div className="flex justify-between items-start mb-2 pr-10">
                   <div>
@@ -302,13 +312,15 @@ export default function Dashboard() {
         <div className="mt-8">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-lg font-semibold">Leaderboard</h2>
-            <button
-              onClick={() => setIsAthleteModalOpen(true)}
-              className="bg-[#377850] text-white w-10 h-10 flex items-center justify-center text-2xl font-light hover:bg-[#2d5f40] transition-colors rounded leading-none"
-              title="Add Athlete"
-            >
-              +
-            </button>
+            {isAdminMode && (
+              <button
+                onClick={() => setIsAthleteModalOpen(true)}
+                className="bg-[#377850] text-white w-10 h-10 flex items-center justify-center text-2xl font-light hover:bg-[#2d5f40] transition-colors rounded leading-none"
+                title="Add Athlete"
+              >
+                +
+              </button>
+            )}
           </div>
           
           {isLoadingLeaderboard ? (

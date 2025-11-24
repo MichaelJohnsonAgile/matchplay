@@ -16,6 +16,10 @@ export default function GameDay() {
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   
+  // Check if admin mode is enabled via URL parameter
+  const searchParams = new URLSearchParams(window.location.search)
+  const isAdminMode = searchParams.get('admin') === 'true'
+  
   useEffect(() => {
     loadGameDay()
   }, [id])
@@ -79,8 +83,8 @@ export default function GameDay() {
   
   const tabs = [
     {
-      label: 'Athletes',
-      content: <AthletesTab gameDayId={id} gameDay={gameDay} onUpdate={loadGameDay} />,
+      label: `Athletes (${gameDay.athleteCount || 0})`,
+      content: <AthletesTab gameDayId={id} gameDay={gameDay} onUpdate={loadGameDay} isAdminMode={isAdminMode} />,
       disabled: false
     },
     {
@@ -108,7 +112,7 @@ export default function GameDay() {
           >
             ← Back to Dashboard
           </button>
-          {!hasMatches && (
+          {isAdminMode && !hasMatches && (
             <button
               onClick={() => setShowDeleteModal(true)}
               className="border border-red-500 text-red-600 px-3 py-1.5 text-sm font-medium hover:bg-red-50 transition-colors"
