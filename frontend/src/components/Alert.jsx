@@ -78,7 +78,7 @@ export function ConfirmModal({ isOpen, onClose, onConfirm, title, message, confi
         <div className="flex gap-3">
           <button 
             onClick={onClose}
-            className="flex-1 border border-[#377850] px-4 py-2 text-sm font-medium hover:bg-gray-100"
+            className="flex-1 border border-gray-200 px-4 py-2 text-sm font-medium hover:bg-gray-100"
           >
             {cancelText}
           </button>

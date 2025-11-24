@@ -13,7 +13,7 @@ export default function GroupsTab() {
       <h2 className="text-xl font-semibold">Groups Performance</h2>
       
       {/* Round Tabs */}
-      <div className="flex border-b border-[#377850] overflow-x-auto">
+      <div className="flex border-b border-gray-200 overflow-x-auto">
         {rounds.map((round, index) => (
           <button
             key={index}
@@ -30,13 +30,13 @@ export default function GroupsTab() {
       {/* Groups Display */}
       <div className="space-y-6">
         {groups.map((groupNum) => (
-          <div key={groupNum} className="border border-[#377850] rounded-lg p-4">
+          <div key={groupNum} className="border border-gray-200 rounded-lg p-4">
             <h3 className="text-lg font-semibold mb-4">Group {groupNum}</h3>
             
             <div className="overflow-x-auto">
               <table className="w-full border-collapse text-sm">
                 <thead>
-                  <tr className="border-b border-[#377850]">
+                  <tr className="border-b border-gray-200">
                     <th className="p-2 text-left font-semibold">Athlete</th>
                     <th className="p-2 text-center font-semibold">Played</th>
                     <th className="p-2 text-center font-semibold">Wins</th>
@@ -49,7 +49,7 @@ export default function GroupsTab() {
                 <tbody>
                   {/* Skeleton rows for 4 athletes per group */}
                   {[1, 2, 3, 4].map((athleteNum) => (
-                    <tr key={athleteNum} className="border-b border-gray-300">
+                    <tr key={athleteNum} className="border-b border-gray-200">
                       <td className="p-2">
                         <div className="skeleton h-4 w-24"></div>
                       </td>

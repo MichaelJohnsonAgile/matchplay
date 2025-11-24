@@ -275,7 +275,7 @@ export default function MatchesTab({ gameDayId, gameDay }) {
       )}
       
       {!hasMatches ? (
-        <div className="border border-gray-300 p-8 text-center text-gray-600">
+        <div className="border border-gray-200 p-8 text-center text-gray-600">
           <svg className="w-16 h-16 mx-auto mb-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
           </svg>
@@ -293,7 +293,7 @@ export default function MatchesTab({ gameDayId, gameDay }) {
             id="group-select"
             value={selectedGroup}
             onChange={(e) => setSelectedGroup(e.target.value)}
-            className="border border-[#377850] px-4 py-2 text-sm font-medium min-w-[120px]"
+            className="border border-gray-200 px-4 py-2 text-sm font-medium min-w-[120px]"
           >
             {groupOptions.map((group) => (
               <option key={group.value} value={group.value}>
@@ -306,7 +306,7 @@ export default function MatchesTab({ gameDayId, gameDay }) {
             id="round-select"
             value={selectedRound}
             onChange={(e) => setSelectedRound(e.target.value)}
-            className="border border-[#377850] px-4 py-2 text-sm font-medium min-w-[120px]"
+            className="border border-gray-200 px-4 py-2 text-sm font-medium min-w-[120px]"
           >
             {rounds.map((round) => (
               <option key={round.value} value={round.value}>
@@ -351,7 +351,7 @@ export default function MatchesTab({ gameDayId, gameDay }) {
               <div className="skeleton h-32"></div>
             </div>
           ) : filteredMatches.length === 0 ? (
-            <div className="border border-gray-300 p-8 text-center text-gray-500">
+            <div className="border border-gray-200 p-8 text-center text-gray-500">
               No matches generated yet. Generate the draw from the Athletes tab.
             </div>
           ) : (
@@ -362,7 +362,7 @@ export default function MatchesTab({ gameDayId, gameDay }) {
                   <h5 className="text-sm font-semibold mb-2">Group Standings</h5>
                   <table className="w-full border-collapse text-sm">
                     <thead>
-                      <tr className="border-b border-[#377850]">
+                      <tr className="border-b border-gray-200">
                         <th className="p-2 text-center font-semibold">Pos</th>
                         <th className="p-2 text-left font-semibold">Athlete</th>
                         <th className="p-2 text-center font-semibold">W</th>
@@ -414,7 +414,7 @@ export default function MatchesTab({ gameDayId, gameDay }) {
                         }
                         
                         return (
-                          <tr key={athlete.id} className={`border-b border-gray-300 ${bgColor}`}>
+                          <tr key={athlete.id} className={`border-b border-gray-200 ${bgColor}`}>
                             <td className="p-2 text-center font-semibold">
                               {position}
                             </td>
@@ -446,7 +446,7 @@ export default function MatchesTab({ gameDayId, gameDay }) {
                 return (
                   <div 
                     key={match.id}
-                    className="border border-gray-300 rounded p-3"
+                    className="border border-gray-200 rounded p-3"
                   >
                     <div className="text-xs text-gray-600 mb-3 flex justify-between items-center">
                       <span>Match {index + 1} <span className="text-gray-400">({match.id.substring(match.id.length - 8)})</span></span>
@@ -475,7 +475,7 @@ export default function MatchesTab({ gameDayId, gameDay }) {
                               {getAthleteName(match.teamA.players[1])}
                             </span>
                           </div>
-                          <div className="h-8 w-16 rounded border border-gray-300 bg-gray-100 flex items-center justify-center font-semibold flex-shrink-0">
+                          <div className="h-8 w-16 rounded border border-gray-200 bg-gray-100 flex items-center justify-center font-semibold flex-shrink-0">
                             {match.teamA.score !== null ? match.teamA.score : '-'}
                           </div>
                         </div>
@@ -500,7 +500,7 @@ export default function MatchesTab({ gameDayId, gameDay }) {
                               {getAthleteName(match.teamB.players[1])}
                             </span>
                           </div>
-                          <div className="h-8 w-16 rounded border border-gray-300 bg-gray-100 flex items-center justify-center font-semibold flex-shrink-0">
+                          <div className="h-8 w-16 rounded border border-gray-200 bg-gray-100 flex items-center justify-center font-semibold flex-shrink-0">
                             {match.teamB.score !== null ? match.teamB.score : '-'}
                           </div>
                         </div>
@@ -542,7 +542,7 @@ export default function MatchesTab({ gameDayId, gameDay }) {
                 min="0"
                 value={tempScores.teamA}
                 onChange={(e) => setTempScores(prev => ({ ...prev, teamA: e.target.value }))}
-                className="w-full h-12 rounded border border-gray-300 bg-gray-100 text-center text-2xl font-semibold focus:outline-none focus:border-[#377850] focus:bg-white"
+                className="w-full h-12 rounded border border-gray-200 bg-gray-100 text-center text-2xl font-semibold focus:outline-none focus:border-gray-200 focus:bg-white"
                 placeholder="0"
                 autoFocus
               />
@@ -560,7 +560,7 @@ export default function MatchesTab({ gameDayId, gameDay }) {
                 min="0"
                 value={tempScores.teamB}
                 onChange={(e) => setTempScores(prev => ({ ...prev, teamB: e.target.value }))}
-                className="w-full h-12 rounded border border-gray-300 bg-gray-100 text-center text-2xl font-semibold focus:outline-none focus:border-[#377850] focus:bg-white"
+                className="w-full h-12 rounded border border-gray-200 bg-gray-100 text-center text-2xl font-semibold focus:outline-none focus:border-gray-200 focus:bg-white"
                 placeholder="0"
               />
             </div>
@@ -569,7 +569,7 @@ export default function MatchesTab({ gameDayId, gameDay }) {
             <div className="flex gap-3 pt-4">
               <button 
                 onClick={closeModal}
-                className="flex-1 border border-[#377850] px-4 py-2 text-sm font-medium"
+                className="flex-1 border border-gray-200 px-4 py-2 text-sm font-medium"
               >
                 Cancel
               </button>

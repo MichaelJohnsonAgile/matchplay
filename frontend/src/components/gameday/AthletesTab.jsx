@@ -228,9 +228,8 @@ export default function AthletesTab({ gameDayId, gameDay, onUpdate }) {
         <div className="overflow-x-auto">
           <table className="w-full border-collapse text-sm">
               <thead>
-                <tr className="border-b border-[#377850]">
+                <tr className="border-b border-gray-200">
                   <th className="p-2 text-left font-semibold">Rank</th>
-                  <th className="p-2 text-center font-semibold">Initial Group</th>
                   <th className="p-2 text-left font-semibold">Athlete</th>
                   <th className="p-2 text-center font-semibold">Played</th>
                   <th className="p-2 text-center font-semibold">W</th>
@@ -245,11 +244,10 @@ export default function AthletesTab({ gameDayId, gameDay, onUpdate }) {
               {isLoading ? (
                 // Skeleton rows
                 [1, 2, 3, 4, 5, 6, 7, 8].map((num) => (
-                  <tr key={num} className="border-b border-gray-300">
+                  <tr key={num} className="border-b border-gray-200">
                     <td className="p-2">
                       <div className="skeleton h-4 w-8"></div>
                     </td>
-                    <td className="p-2 text-center font-semibold">-</td>
                     <td className="p-2">
                       <div className="skeleton h-4 w-32"></div>
                     </td>
@@ -276,18 +274,15 @@ export default function AthletesTab({ gameDayId, gameDay, onUpdate }) {
                 ))
               ) : gameDayAthletes.length === 0 ? (
                 <tr>
-                  <td colSpan="10" className="p-8 text-center text-gray-500">
+                  <td colSpan="9" className="p-8 text-center text-gray-500">
                     No athletes added yet. Click "Add +" to add athletes to this game day.
                   </td>
                 </tr>
               ) : (
                 // Sort athletes by rank before displaying
                 [...gameDayAthletes].sort((a, b) => a.rank - b.rank).map((athlete, index) => (
-                  <tr key={athlete.id} className="border-b border-gray-300">
+                  <tr key={athlete.id} className="border-b border-gray-200">
                     <td className="p-2">{athlete.rank}</td>
-                    <td className="p-2 text-center font-semibold">
-                      {Math.ceil((index + 1) / 4)}
-                    </td>
                     <td className="p-2">{athlete.name}</td>
                     <td className="p-2 text-center">{athlete.stats.matchesPlayed}</td>
                     <td className="p-2 text-center">{athlete.stats.wins}</td>
@@ -352,10 +347,10 @@ export default function AthletesTab({ gameDayId, gameDay, onUpdate }) {
           )}
         </div>
         
-        <div className="flex gap-3 pt-4 border-t border-gray-300">
+        <div className="flex gap-3 pt-4 border-t border-gray-200">
           <button 
             onClick={() => setIsAddModalOpen(false)}
-            className="flex-1 border border-[#377850] px-4 py-2 text-sm font-medium"
+            className="flex-1 border border-gray-200 px-4 py-2 text-sm font-medium"
           >
             Cancel
           </button>

@@ -10,7 +10,7 @@ export default function Tabs({ tabs, defaultTab = 0 }) {
 
   return (
     <div className="w-full">
-      <div className="flex border-b border-[#377850] overflow-x-auto">
+      <div className="flex border-b border-gray-200 overflow-x-auto">
         {tabs.map((tab, index) => (
           <button
             key={index}

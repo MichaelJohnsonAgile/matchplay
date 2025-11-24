@@ -11,7 +11,7 @@ export function SkeletonTable({ rows = 5, cols = 6 }) {
     <div className="overflow-x-auto">
       <table className="w-full border-collapse">
         <thead>
-          <tr className="border-b border-[#377850]">
+          <tr className="border-b border-gray-200">
             {Array.from({ length: cols }).map((_, i) => (
               <th key={i} className="p-3 text-left">
                 <SkeletonText className="w-16" />
@@ -21,7 +21,7 @@ export function SkeletonTable({ rows = 5, cols = 6 }) {
         </thead>
         <tbody>
           {Array.from({ length: rows }).map((_, rowIndex) => (
-            <tr key={rowIndex} className="border-b border-gray-300">
+            <tr key={rowIndex} className="border-b border-gray-200">
               {Array.from({ length: cols }).map((_, colIndex) => (
                 <td key={colIndex} className="p-3">
                   <SkeletonText className="w-12" />

@@ -75,7 +75,7 @@ export default function GameDay() {
 
   return (
     <div className="min-h-screen bg-white">
-      <header className="border-b border-[#377850] p-4">
+      <header className="border-b border-gray-200 p-4">
         <img 
           src="/logo.svg" 
           alt="MatchPlay" 
@@ -86,7 +86,7 @@ export default function GameDay() {
         </div>
         <button
           onClick={() => navigate('/')}
-          className="border border-[#377850] px-3 py-1.5 text-sm font-medium mt-3 hover:bg-gray-50 transition-colors"
+          className="border border-gray-200 px-3 py-1.5 text-sm font-medium mt-3 hover:bg-gray-50 transition-colors"
         >
           ← Back to Dashboard
         </button>

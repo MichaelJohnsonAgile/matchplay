@@ -88,7 +88,7 @@ export default function Dashboard() {
         return 'bg-gray-100 text-gray-800 border-gray-800'
       case 'upcoming':
       default:
-        return 'bg-white text-[#377850] border-[#377850]'
+        return 'bg-white text-[#377850] border-gray-200'
     }
   }
 
@@ -106,7 +106,7 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-white">
-      <header className="border-b border-[#377850] p-4">
+      <header className="border-b border-gray-200 p-4">
         <img 
           src="/logo.svg" 
           alt="MatchPlay" 
@@ -139,7 +139,7 @@ export default function Dashboard() {
             <Skeleton className="h-32" />
           </div>
         ) : gameDays.length === 0 ? (
-          <div className="border border-[#377850] p-8 text-center mb-6">
+          <div className="border border-gray-200 p-8 text-center mb-6">
             <p className="text-gray-600 mb-4">No game days scheduled yet</p>
             <button
               onClick={handleCreateGameDay}
@@ -154,7 +154,7 @@ export default function Dashboard() {
               <div
                 key={gameDay.id}
                 onClick={() => handleGameDayClick(gameDay.id)}
-                className="border border-[#377850] p-4 cursor-pointer hover:bg-gray-50 transition-colors"
+                className="border border-gray-200 p-4 cursor-pointer hover:bg-gray-50 transition-colors"
               >
                 <div className="flex justify-between items-start mb-2">
                   <div>
@@ -178,7 +178,7 @@ export default function Dashboard() {
             {!showAllGameDays && gameDays.length > filteredGameDays.length && (
               <button
                 onClick={() => setShowAllGameDays(true)}
-                className="w-full border border-[#377850] px-4 py-3 text-sm font-medium hover:bg-gray-50 transition-colors"
+                className="w-full border border-gray-200 px-4 py-3 text-sm font-medium hover:bg-gray-50 transition-colors"
               >
                 See All Game Days ({gameDays.length})
               </button>
@@ -187,7 +187,7 @@ export default function Dashboard() {
             {showAllGameDays && (
               <button
                 onClick={() => setShowAllGameDays(false)}
-                className="w-full border border-[#377850] px-4 py-3 text-sm font-medium hover:bg-gray-50 transition-colors"
+                className="w-full border border-gray-200 px-4 py-3 text-sm font-medium hover:bg-gray-50 transition-colors"
               >
                 Show Less
               </button>
@@ -208,13 +208,13 @@ export default function Dashboard() {
               <Skeleton className="h-12" />
             </div>
           ) : leaderboard.length === 0 ? (
-            <div className="border border-[#377850] p-8 text-center">
+            <div className="border border-gray-200 p-8 text-center">
               <p className="text-gray-600">No leaderboard data yet. Complete some matches to see rankings!</p>
             </div>
           ) : (
-            <div className="border border-[#377850] overflow-x-auto">
+            <div className="border border-gray-200 overflow-x-auto">
               <table className="w-full text-sm">
-                <thead className="border-b border-[#377850] bg-gray-50">
+                <thead className="border-b border-gray-200 bg-gray-50">
                   <tr>
                     <th className="text-left p-3 font-semibold">Rank</th>
                     <th className="text-left p-3 font-semibold">Athlete</th>
@@ -344,7 +344,7 @@ function CreateGameDayForm({ onClose, onSuccess }) {
           value={formData.date}
           onChange={handleChange}
           required
-          className="w-full border border-[#377850] px-3 py-2 text-sm"
+          className="w-full border border-gray-200 px-3 py-2 text-sm"
         />
       </div>
 
@@ -359,11 +359,11 @@ function CreateGameDayForm({ onClose, onSuccess }) {
           onChange={handleChange}
           required
           placeholder="e.g., Central Pickleball Courts"
-          className="w-full border border-[#377850] px-3 py-2 text-sm"
+          className="w-full border border-gray-200 px-3 py-2 text-sm"
         />
       </div>
 
-      <div className="border-t border-gray-300 pt-4">
+      <div className="border-t border-gray-200 pt-4">
         <h3 className="font-semibold mb-3">Scoring Rules</h3>
         
         <div className="grid grid-cols-2 gap-4">
@@ -375,7 +375,7 @@ function CreateGameDayForm({ onClose, onSuccess }) {
               name="pointsToWin"
               value={formData.pointsToWin}
               onChange={handleChange}
-              className="w-full border border-[#377850] px-3 py-2 text-sm"
+              className="w-full border border-gray-200 px-3 py-2 text-sm"
             >
               <option value="9">9</option>
               <option value="11">11</option>
@@ -392,7 +392,7 @@ function CreateGameDayForm({ onClose, onSuccess }) {
               name="winByMargin"
               value={formData.winByMargin}
               onChange={handleChange}
-              className="w-full border border-[#377850] px-3 py-2 text-sm"
+              className="w-full border border-gray-200 px-3 py-2 text-sm"
             >
               <option value="1">1</option>
               <option value="2">2</option>
@@ -409,7 +409,7 @@ function CreateGameDayForm({ onClose, onSuccess }) {
           name="rounds"
           value={formData.rounds}
           onChange={handleChange}
-          className="w-full border border-[#377850] px-3 py-2 text-sm"
+          className="w-full border border-gray-200 px-3 py-2 text-sm"
         >
           <option value="2">2</option>
           <option value="3">3</option>
@@ -425,7 +425,7 @@ function CreateGameDayForm({ onClose, onSuccess }) {
           name="movementRule"
           value={formData.movementRule}
           onChange={handleChange}
-          className="w-full border border-[#377850] px-3 py-2 text-sm"
+          className="w-full border border-gray-200 px-3 py-2 text-sm"
         >
           <option value="auto">Auto (2 if any 5-player group, else 1)</option>
           <option value="1">1 up, 1 down</option>
@@ -437,7 +437,7 @@ function CreateGameDayForm({ onClose, onSuccess }) {
         <button
           type="button"
           onClick={onClose}
-          className="flex-1 border border-[#377850] px-4 py-2 text-sm font-medium"
+          className="flex-1 border border-gray-200 px-4 py-2 text-sm font-medium"
         >
           Cancel
         </button>
