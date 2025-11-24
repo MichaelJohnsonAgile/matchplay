@@ -72,7 +72,7 @@ gameDayRoutes.get('/:id', async (req, res) => {
 // POST /api/gamedays - Create new game day
 gameDayRoutes.post('/', async (req, res) => {
   try {
-    const { date, venue, pointsToWin, winByMargin, rounds, movementRule } = req.body
+    const { date, venue, format, pointsToWin, winByMargin, rounds, movementRule, numberOfTeams } = req.body
     
     if (!date || !venue) {
       return res.status(400).json({ error: 'Date and venue are required' })
@@ -83,11 +83,12 @@ gameDayRoutes.post('/', async (req, res) => {
       date,
       venue,
       status: 'upcoming',
-      format: 'group',
+      format: format || 'group',
       pointsToWin: pointsToWin || 11,
       winByMargin: winByMargin || 2,
       numberOfRounds: rounds || 3,
-      movementRule: movementRule || 'auto'
+      movementRule: movementRule || 'auto',
+      numberOfTeams: numberOfTeams || 2
     })
     
     const stats = await db.getGameDayStats(newGameDay.id)
@@ -102,7 +103,8 @@ gameDayRoutes.post('/', async (req, res) => {
       pointsToWin: newGameDay.points_to_win,
       winByMargin: newGameDay.win_by_margin,
       numberOfRounds: newGameDay.number_of_rounds,
-      movementRule: newGameDay.movement_rule
+      movementRule: newGameDay.movement_rule,
+      numberOfTeams: newGameDay.number_of_teams
     },
     ...stats
   })
@@ -130,7 +132,8 @@ gameDayRoutes.put('/:id', async (req, res) => {
         pointsToWin: updatedGameDay.points_to_win,
         winByMargin: updatedGameDay.win_by_margin,
         numberOfRounds: updatedGameDay.number_of_rounds,
-        movementRule: updatedGameDay.movement_rule
+        movementRule: updatedGameDay.movement_rule,
+        numberOfTeams: updatedGameDay.number_of_teams
       }
     })
   } catch (error) {
@@ -290,76 +293,83 @@ gameDayRoutes.post('/:id/generate-draw', async (req, res) => {
       return res.status(404).json({ error: 'Game day not found' })
     }
     
-    console.log(`Game day found: ${gameDay.id}`)
+    console.log(`Game day found: ${gameDay.id}, format: ${gameDay.format}`)
     
     const athletes = await db.getGameDayAthletes(req.params.id)
     const numAthletes = athletes.length
     
     console.log(`Found ${numAthletes} athletes`)
     
-    // Validate minimum athletes
-    if (numAthletes < 8) {
-      console.log(`Not enough athletes: ${numAthletes}`)
-      return res.status(400).json({ 
-        error: 'At least 8 athletes required to generate draw',
-        currentCount: numAthletes
-      })
-    }
-    
-    console.log('Athletes sorted by rank:', athletes.map(a => `${a.name} (Rank ${a.rank})`))
-    
     // Clear existing matches for this game day
     console.log('Clearing existing matches...')
     await db.deleteMatchesByGameDay(req.params.id)
     
-    // Calculate group allocation
-    console.log('Calculating group allocation...')
-    const allocation = calculateGroupAllocation(numAthletes)
-    
-    // Check if allocation failed
-    if (allocation.error) {
-      console.log(`Allocation error: ${allocation.description}`)
-      return res.status(400).json({ 
-        error: allocation.description,
-        suggestion: 'Add or remove athletes to reach a valid group size'
+    // Check format and route to appropriate generator
+    if (gameDay.format === 'teams') {
+      // TEAMS MODE
+      return await generateTeamsMatches(req.params.id, gameDay, res)
+    } else {
+      // GROUP MODE (existing logic)
+      // Validate minimum athletes
+      if (numAthletes < 8) {
+        console.log(`Not enough athletes: ${numAthletes}`)
+        return res.status(400).json({ 
+          error: 'At least 8 athletes required to generate draw',
+          currentCount: numAthletes
+        })
+      }
+      
+      console.log('Athletes sorted by rank:', athletes.map(a => `${a.name} (Rank ${a.rank})`))
+      
+      // Calculate group allocation
+      console.log('Calculating group allocation...')
+      const allocation = calculateGroupAllocation(numAthletes)
+      
+      // Check if allocation failed
+      if (allocation.error) {
+        console.log(`Allocation error: ${allocation.description}`)
+        return res.status(400).json({ 
+          error: allocation.description,
+          suggestion: 'Add or remove athletes to reach a valid group size'
+        })
+      }
+      
+      console.log(`Allocation: ${allocation.description}`)
+      
+      // Create groups based on allocation
+      const groups = []
+      let athleteIndex = 0
+      
+      for (let i = 0; i < allocation.numGroups; i++) {
+        const groupSize = allocation.groupSizes[i]
+        groups.push(athletes.slice(athleteIndex, athleteIndex + groupSize))
+        athleteIndex += groupSize
+      }
+      
+      console.log(`Created ${groups.length} groups`)
+      
+      // Generate matches for Round 1
+      let totalMatches = 0
+      for (let groupIndex = 0; groupIndex < groups.length; groupIndex++) {
+        console.log(`Generating matches for group ${groupIndex + 1}...`)
+        const matches = generateGroupMatches(groups[groupIndex], req.params.id, 1, groupIndex + 1)
+        for (const match of matches) {
+          await db.createMatch(match)
+          totalMatches++
+        }
+      }
+      
+      console.log(`✅ Generated ${totalMatches} matches`)
+      
+      res.json({ 
+        message: 'Draw generated successfully',
+        matchesGenerated: totalMatches,
+        groups: allocation.numGroups,
+        groupSizes: allocation.groupSizes,
+        allocation: allocation.description,
+        success: true
       })
     }
-    
-    console.log(`Allocation: ${allocation.description}`)
-    
-    // Create groups based on allocation
-    const groups = []
-    let athleteIndex = 0
-    
-    for (let i = 0; i < allocation.numGroups; i++) {
-      const groupSize = allocation.groupSizes[i]
-      groups.push(athletes.slice(athleteIndex, athleteIndex + groupSize))
-      athleteIndex += groupSize
-    }
-    
-    console.log(`Created ${groups.length} groups`)
-    
-    // Generate matches for Round 1
-    let totalMatches = 0
-    for (let groupIndex = 0; groupIndex < groups.length; groupIndex++) {
-      console.log(`Generating matches for group ${groupIndex + 1}...`)
-      const matches = generateGroupMatches(groups[groupIndex], req.params.id, 1, groupIndex + 1)
-      for (const match of matches) {
-        await db.createMatch(match)
-        totalMatches++
-      }
-    }
-    
-    console.log(`✅ Generated ${totalMatches} matches`)
-    
-    res.json({ 
-      message: 'Draw generated successfully',
-      matchesGenerated: totalMatches,
-      groups: allocation.numGroups,
-      groupSizes: allocation.groupSizes,
-      allocation: allocation.description,
-      success: true
-    })
   } catch (error) {
     console.error('❌ Error generating draw:', error)
     console.error('Error stack:', error.stack)
@@ -780,5 +790,160 @@ async function generateNextRound(gameDayId, previousRound, gameDay) {
     round: nextRound,
     matchesGenerated: newMatchesCount,
     groups: finalGroupsWithAthletes.length
+  }
+}
+
+// Helper function to generate matches for teams mode
+async function generateTeamsMatches(gameDayId, gameDay, res) {
+  try {
+    console.log('Generating matches for TEAMS mode')
+    
+    // Get teams for this game day
+    const teams = await db.getTeamsByGameDay(gameDayId)
+    
+    if (teams.length === 0) {
+      return res.status(400).json({
+        error: 'No teams found. Please generate teams first.',
+        suggestion: 'Go to the Teams tab and click "Generate Teams"'
+      })
+    }
+    
+    console.log(`Found ${teams.length} teams`)
+    
+    // Get team members
+    const teamData = await Promise.all(teams.map(async (team) => {
+      const members = await db.getTeamMembers(team.id)
+      return {
+        team,
+        members
+      }
+    }))
+    
+    // Generate all possible partnerships for each team
+    const teamPartnerships = teamData.map(({ team, members }) => {
+      const pairs = []
+      
+      for (let i = 0; i < members.length; i++) {
+        for (let j = i + 1; j < members.length; j++) {
+          pairs.push({
+            team,
+            player1: members[i],
+            player2: members[j],
+            combinedRank: members[i].rank + members[j].rank
+          })
+        }
+      }
+      
+      return { team, pairs }
+    })
+    
+    console.log('Partnerships per team:', teamPartnerships.map(tp => `Team ${tp.team.team_number}: ${tp.pairs.length} pairs`))
+    
+    // Generate match pairings
+    const matches = []
+    const numberOfTeams = teams.length
+    
+    if (numberOfTeams === 2) {
+      // Simple 2-team matchup
+      const team0Pairs = teamPartnerships[0].pairs
+      const team1Pairs = teamPartnerships[1].pairs
+      
+      // Sort by combined rank
+      const sortedTeam0 = [...team0Pairs].sort((a, b) => a.combinedRank - b.combinedRank)
+      const sortedTeam1 = [...team1Pairs].sort((a, b) => a.combinedRank - b.combinedRank)
+      
+      // Pair them up (match similar ranks)
+      const maxMatches = Math.max(sortedTeam0.length, sortedTeam1.length)
+      
+      for (let i = 0; i < maxMatches; i++) {
+        const pair0 = sortedTeam0[i % sortedTeam0.length]
+        const pair1 = sortedTeam1[i % sortedTeam1.length]
+        
+        matches.push({
+          id: `match-${uuidv4()}`,
+          gameDayId,
+          round: 1,
+          group: 0, // Not used in teams mode
+          court: null,
+          teamA: {
+            players: [pair0.player1.id, pair0.player2.id],
+            score: null
+          },
+          teamB: {
+            players: [pair1.player1.id, pair1.player2.id],
+            score: null
+          },
+          teamATeamId: pair0.team.id,
+          teamBTeamId: pair1.team.id,
+          bye: null,
+          status: 'pending',
+          winner: null,
+          timestamp: null
+        })
+      }
+      
+    } else if (numberOfTeams === 4) {
+      // Round-robin team matchups
+      for (let i = 0; i < teamPartnerships.length; i++) {
+        for (let j = i + 1; j < teamPartnerships.length; j++) {
+          const teamA = teamPartnerships[i]
+          const teamB = teamPartnerships[j]
+          
+          // Sort pairs by rank
+          const sortedA = [...teamA.pairs].sort((a, b) => a.combinedRank - b.combinedRank)
+          const sortedB = [...teamB.pairs].sort((a, b) => a.combinedRank - b.combinedRank)
+          
+          const maxMatches = Math.max(sortedA.length, sortedB.length)
+          
+          for (let k = 0; k < maxMatches; k++) {
+            const pairA = sortedA[k % sortedA.length]
+            const pairB = sortedB[k % sortedB.length]
+            
+            matches.push({
+              id: `match-${uuidv4()}`,
+              gameDayId,
+              round: 1,
+              group: 0,
+              court: null,
+              teamA: {
+                players: [pairA.player1.id, pairA.player2.id],
+                score: null
+              },
+              teamB: {
+                players: [pairB.player1.id, pairB.player2.id],
+                score: null
+              },
+              teamATeamId: pairA.team.id,
+              teamBTeamId: pairB.team.id,
+              bye: null,
+              status: 'pending',
+              winner: null,
+              timestamp: null
+            })
+          }
+        }
+      }
+    }
+    
+    console.log(`Creating ${matches.length} matches...`)
+    
+    // Save matches to database
+    for (const match of matches) {
+      await db.createMatch(match)
+    }
+    
+    console.log(`✅ Generated ${matches.length} team matches`)
+    
+    return res.json({
+      message: 'Teams matches generated successfully',
+      matchesGenerated: matches.length,
+      teams: numberOfTeams,
+      format: 'teams',
+      success: true
+    })
+    
+  } catch (error) {
+    console.error('Error generating teams matches:', error)
+    throw error
   }
 }

@@ -454,10 +454,12 @@ function CreateGameDayForm({ onClose, onSuccess }) {
   const [formData, setFormData] = useState({
     date: '',
     venue: 'Evolve North Narrabeen',
+    format: 'group', // 'group' or 'teams'
     pointsToWin: 11,
     winByMargin: 2,
     rounds: 3,
-    movementRule: 'auto' // auto, 1, or 2
+    movementRule: 'auto', // auto, 1, or 2
+    numberOfTeams: 2 // 2 or 4
   })
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState(null)
@@ -532,6 +534,45 @@ function CreateGameDayForm({ onClose, onSuccess }) {
       </div>
 
       <div className="border-t border-gray-200 pt-4">
+        <h3 className="font-semibold mb-3">Game Format</h3>
+        
+        <div>
+          <label className="block text-sm font-medium mb-1">
+            Format
+          </label>
+          <select
+            name="format"
+            value={formData.format}
+            onChange={handleChange}
+            className="w-full border border-gray-200 px-3 py-2 text-sm"
+          >
+            <option value="group">Group (Courts)</option>
+            <option value="teams">Teams</option>
+          </select>
+        </div>
+
+        {formData.format === 'teams' && (
+          <div className="mt-4">
+            <label className="block text-sm font-medium mb-1">
+              Number of Teams
+            </label>
+            <select
+              name="numberOfTeams"
+              value={formData.numberOfTeams}
+              onChange={handleChange}
+              className="w-full border border-gray-200 px-3 py-2 text-sm"
+            >
+              <option value="2">2 Teams (Blue vs Red)</option>
+              <option value="4">4 Teams (Blue vs Red vs Green vs Yellow)</option>
+            </select>
+            <p className="text-xs text-gray-500 mt-1">
+              Min 4 players per team, max 5 players per team
+            </p>
+          </div>
+        )}
+      </div>
+
+      <div className="border-t border-gray-200 pt-4">
         <h3 className="font-semibold mb-3">Scoring Rules</h3>
         
         <div className="grid grid-cols-2 gap-4">
@@ -545,6 +586,7 @@ function CreateGameDayForm({ onClose, onSuccess }) {
               onChange={handleChange}
               className="w-full border border-gray-200 px-3 py-2 text-sm"
             >
+              <option value="7">7</option>
               <option value="9">9</option>
               <option value="11">11</option>
               <option value="15">15</option>
@@ -569,37 +611,49 @@ function CreateGameDayForm({ onClose, onSuccess }) {
         </div>
       </div>
 
-      <div>
-        <label className="block text-sm font-medium mb-1">
-          Number of Rounds
-        </label>
-        <select
-          name="rounds"
-          value={formData.rounds}
-          onChange={handleChange}
-          className="w-full border border-gray-200 px-3 py-2 text-sm"
-        >
-          <option value="2">2</option>
-          <option value="3">3</option>
-          <option value="4">4</option>
-        </select>
-      </div>
+      {formData.format === 'group' && (
+        <>
+          <div>
+            <label className="block text-sm font-medium mb-1">
+              Number of Rounds
+            </label>
+            <select
+              name="rounds"
+              value={formData.rounds}
+              onChange={handleChange}
+              className="w-full border border-gray-200 px-3 py-2 text-sm"
+            >
+              <option value="2">2</option>
+              <option value="3">3</option>
+              <option value="4">4</option>
+            </select>
+          </div>
 
-      <div>
-        <label className="block text-sm font-medium mb-1">
-          Movement Between Rounds
-        </label>
-        <select
-          name="movementRule"
-          value={formData.movementRule}
-          onChange={handleChange}
-          className="w-full border border-gray-200 px-3 py-2 text-sm"
-        >
-          <option value="auto">Auto (2 if any 5-player group, else 1)</option>
-          <option value="1">1 up, 1 down</option>
-          <option value="2">2 up, 2 down</option>
-        </select>
-      </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">
+              Movement Between Rounds
+            </label>
+            <select
+              name="movementRule"
+              value={formData.movementRule}
+              onChange={handleChange}
+              className="w-full border border-gray-200 px-3 py-2 text-sm"
+            >
+              <option value="auto">Auto (2 if any 5-player group, else 1)</option>
+              <option value="1">1 up, 1 down</option>
+              <option value="2">2 up, 2 down</option>
+            </select>
+          </div>
+        </>
+      )}
+
+      {formData.format === 'teams' && (
+        <div className="bg-blue-50 border border-blue-200 p-3 text-sm">
+          <p className="text-blue-800">
+            Teams mode: Athletes will be split into balanced teams. Each person partners with their teammates against other teams.
+          </p>
+        </div>
+      )}
 
       <div className="flex gap-2 pt-4">
         <button

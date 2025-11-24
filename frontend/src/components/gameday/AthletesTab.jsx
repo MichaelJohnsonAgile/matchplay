@@ -239,14 +239,15 @@ export default function AthletesTab({ gameDayId, gameDay, onUpdate, isAdminMode 
               )}
             </>
           )}
-          <button 
-            className="bg-[#377850] text-white px-4 py-2 text-sm font-medium hover:bg-[#2a5f3c] disabled:bg-gray-400 disabled:cursor-not-allowed"
-            onClick={() => setIsAddModalOpen(true)}
-            disabled={hasMatchesWithScores}
-            title={hasMatchesWithScores ? 'Scores entered - cannot add athletes' : 'Add yourself to this game day'}
-          >
-            {hasMatchesWithScores ? 'Draw Locked' : 'Join Game Day'}
-          </button>
+          {isAdminMode && (
+            <button 
+              className="bg-[#377850] text-white w-10 h-10 flex items-center justify-center text-2xl font-light hover:bg-[#2a5f3c] transition-colors rounded leading-none"
+              onClick={() => setIsAddModalOpen(true)}
+              title="Add athletes to game day"
+            >
+              +
+            </button>
+          )}
         </div>
       </div>
       
@@ -305,7 +306,7 @@ export default function AthletesTab({ gameDayId, gameDay, onUpdate, isAdminMode 
               ) : gameDayAthletes.length === 0 ? (
                 <tr>
                   <td colSpan="10" className="p-8 text-center text-gray-500">
-                    No players signed up yet. Click "Join Game Day" to add yourself!
+                    No players added yet.
                   </td>
                 </tr>
               ) : (

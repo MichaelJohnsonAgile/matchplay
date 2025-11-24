@@ -4,6 +4,7 @@ import { gameDayRoutes } from './routes/gamedays.js'
 import { athleteRoutes } from './routes/athletes.js'
 import { matchRoutes } from './routes/matches.js'
 import { leaderboardRoutes } from './routes/leaderboard.js'
+import { teamsRoutes } from './routes/teams.js'
 
 const app = express()
 const PORT = process.env.PORT || 3001
@@ -24,6 +25,8 @@ app.use((req, res, next) => {
 
 // Routes
 app.use('/api/gamedays', gameDayRoutes)
+app.use('/api/gamedays', teamsRoutes)  // Teams routes nested under gamedays
+app.use('/api/teams', teamsRoutes)     // Direct team routes
 app.use('/api/athletes', athleteRoutes)
 app.use('/api/matches', matchRoutes)
 app.use('/api/leaderboard', leaderboardRoutes)

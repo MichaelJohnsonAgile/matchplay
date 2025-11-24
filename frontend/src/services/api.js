@@ -229,3 +229,58 @@ export const leaderboardAPI = {
   },
 }
 
+// Teams APIs
+export const teamsAPI = {
+  // Generate teams for a game day
+  async generate(gameDayId) {
+    return apiRequest(`/gamedays/${gameDayId}/teams/generate`, {
+      method: 'POST',
+    })
+  },
+  
+  // Get all teams for a game day
+  async getForGameDay(gameDayId) {
+    return apiRequest(`/gamedays/${gameDayId}/teams`)
+  },
+  
+  // Get team standings/leaderboard
+  async getStandings(gameDayId) {
+    return apiRequest(`/gamedays/${gameDayId}/teams/standings`)
+  },
+  
+  // Get single team by ID
+  async getById(teamId) {
+    return apiRequest(`/teams/${teamId}`)
+  },
+  
+  // Update team (e.g., rename)
+  async update(teamId, teamData) {
+    return apiRequest(`/teams/${teamId}`, {
+      method: 'PUT',
+      body: JSON.stringify(teamData),
+    })
+  },
+  
+  // Add athlete to team
+  async addMember(teamId, athleteId) {
+    return apiRequest(`/teams/${teamId}/members`, {
+      method: 'POST',
+      body: JSON.stringify({ athleteId }),
+    })
+  },
+  
+  // Remove athlete from team
+  async removeMember(teamId, athleteId) {
+    return apiRequest(`/teams/${teamId}/members/${athleteId}`, {
+      method: 'DELETE',
+    })
+  },
+  
+  // Delete team
+  async delete(teamId) {
+    return apiRequest(`/teams/${teamId}`, {
+      method: 'DELETE',
+    })
+  },
+}
+

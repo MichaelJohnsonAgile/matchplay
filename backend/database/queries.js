@@ -59,7 +59,7 @@ export async function getAllGameDays() {
   const result = await query(
     `SELECT 
       id, date, venue, status, format,
-      points_to_win, win_by_margin, number_of_rounds, movement_rule,
+      points_to_win, win_by_margin, number_of_rounds, movement_rule, number_of_teams,
       created_at, updated_at
      FROM gamedays 
      ORDER BY date DESC`
@@ -71,7 +71,7 @@ export async function getGameDayById(id) {
   const result = await query(
     `SELECT 
       id, date, venue, status, format,
-      points_to_win, win_by_margin, number_of_rounds, movement_rule,
+      points_to_win, win_by_margin, number_of_rounds, movement_rule, number_of_teams,
       created_at, updated_at
      FROM gamedays 
      WHERE id = $1`,
@@ -81,11 +81,11 @@ export async function getGameDayById(id) {
 }
 
 export async function createGameDay(gameDayData) {
-  const { id, date, venue, status, format, pointsToWin, winByMargin, numberOfRounds, movementRule } = gameDayData
+  const { id, date, venue, status, format, pointsToWin, winByMargin, numberOfRounds, movementRule, numberOfTeams } = gameDayData
   const result = await query(
     `INSERT INTO gamedays 
-      (id, date, venue, status, format, points_to_win, win_by_margin, number_of_rounds, movement_rule)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      (id, date, venue, status, format, points_to_win, win_by_margin, number_of_rounds, movement_rule, number_of_teams)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
      RETURNING *`,
     [
       id, 
@@ -96,14 +96,15 @@ export async function createGameDay(gameDayData) {
       pointsToWin || 11,
       winByMargin || 2,
       numberOfRounds || 3,
-      movementRule || 'auto'
+      movementRule || 'auto',
+      numberOfTeams || 2
     ]
   )
   return result.rows[0]
 }
 
 export async function updateGameDay(id, gameDayData) {
-  const { date, venue, status, format, pointsToWin, winByMargin, numberOfRounds, movementRule } = gameDayData
+  const { date, venue, status, format, pointsToWin, winByMargin, numberOfRounds, movementRule, numberOfTeams } = gameDayData
   const result = await query(
     `UPDATE gamedays 
      SET date = COALESCE($2, date),
@@ -113,10 +114,11 @@ export async function updateGameDay(id, gameDayData) {
          points_to_win = COALESCE($6, points_to_win),
          win_by_margin = COALESCE($7, win_by_margin),
          number_of_rounds = COALESCE($8, number_of_rounds),
-         movement_rule = COALESCE($9, movement_rule)
+         movement_rule = COALESCE($9, movement_rule),
+         number_of_teams = COALESCE($10, number_of_teams)
      WHERE id = $1
      RETURNING *`,
-    [id, date, venue, status, format, pointsToWin, winByMargin, numberOfRounds, movementRule]
+    [id, date, venue, status, format, pointsToWin, winByMargin, numberOfRounds, movementRule, numberOfTeams]
   )
   return result.rows[0] || null
 }
@@ -211,6 +213,8 @@ export async function createMatch(matchData) {
     court,
     teamA,
     teamB,
+    teamATeamId,
+    teamBTeamId,
     bye,
     status,
     winner,
@@ -222,8 +226,9 @@ export async function createMatch(matchData) {
       (id, gameday_id, round, match_group, court, 
        team_a_player1, team_a_player2, team_a_score,
        team_b_player1, team_b_player2, team_b_score,
+       team_a_team_id, team_b_team_id,
        bye_athlete, status, winner, timestamp)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
      RETURNING *`,
     [
       id,
@@ -237,6 +242,8 @@ export async function createMatch(matchData) {
       teamB.players[0],
       teamB.players[1],
       teamB.score,
+      teamATeamId || null,
+      teamBTeamId || null,
       bye || null,
       status || 'pending',
       winner || null,
@@ -290,6 +297,8 @@ function formatMatchFromDb(row) {
       players: [row.team_b_player1, row.team_b_player2],
       score: row.team_b_score
     },
+    teamATeamId: row.team_a_team_id,
+    teamBTeamId: row.team_b_team_id,
     bye: row.bye_athlete,
     status: row.status,
     winner: row.winner,
@@ -433,5 +442,172 @@ export async function getGameDayAthleteStats(gameDayId, athleteId) {
     pointsAgainst: parseInt(row.points_against),
     pointsDiff: parseInt(row.points_for) - parseInt(row.points_against)
   }
+}
+
+// ============= TEAMS =============
+
+export async function createTeam(teamData) {
+  const { id, gameDayId, teamNumber, teamName, teamColor } = teamData
+  const result = await query(
+    `INSERT INTO teams (id, gameday_id, team_number, team_name, team_color)
+     VALUES ($1, $2, $3, $4, $5)
+     RETURNING *`,
+    [id, gameDayId, teamNumber, teamName, teamColor]
+  )
+  return result.rows[0]
+}
+
+export async function getTeamById(teamId) {
+  const result = await query('SELECT * FROM teams WHERE id = $1', [teamId])
+  return result.rows[0] || null
+}
+
+export async function getTeamsByGameDay(gameDayId) {
+  const result = await query(
+    'SELECT * FROM teams WHERE gameday_id = $1 ORDER BY team_number ASC',
+    [gameDayId]
+  )
+  return result.rows
+}
+
+export async function updateTeam(teamId, updates) {
+  const { teamName, teamColor } = updates
+  const result = await query(
+    `UPDATE teams 
+     SET team_name = COALESCE($2, team_name),
+         team_color = COALESCE($3, team_color)
+     WHERE id = $1
+     RETURNING *`,
+    [teamId, teamName, teamColor]
+  )
+  return result.rows[0] || null
+}
+
+export async function deleteTeam(teamId) {
+  const result = await query('DELETE FROM teams WHERE id = $1', [teamId])
+  return result.rowCount > 0
+}
+
+export async function deleteTeamsByGameDay(gameDayId) {
+  const result = await query('DELETE FROM teams WHERE gameday_id = $1', [gameDayId])
+  return result.rowCount
+}
+
+// ============= TEAM MEMBERS =============
+
+export async function addAthleteToTeam(teamId, athleteId) {
+  const result = await query(
+    `INSERT INTO team_members (team_id, athlete_id)
+     VALUES ($1, $2)
+     ON CONFLICT (team_id, athlete_id) DO NOTHING
+     RETURNING *`,
+    [teamId, athleteId]
+  )
+  return result.rowCount > 0
+}
+
+export async function removeAthleteFromTeam(teamId, athleteId) {
+  const result = await query(
+    'DELETE FROM team_members WHERE team_id = $1 AND athlete_id = $2',
+    [teamId, athleteId]
+  )
+  return result.rowCount > 0
+}
+
+export async function getTeamMembers(teamId) {
+  const result = await query(
+    `SELECT a.id, a.name, a.email, a.rank, a.status
+     FROM athletes a
+     INNER JOIN team_members tm ON a.id = tm.athlete_id
+     WHERE tm.team_id = $1
+     ORDER BY a.rank ASC`,
+    [teamId]
+  )
+  return result.rows
+}
+
+export async function getAthleteTeam(gameDayId, athleteId) {
+  const result = await query(
+    `SELECT t.*
+     FROM teams t
+     INNER JOIN team_members tm ON t.id = tm.team_id
+     WHERE t.gameday_id = $1 AND tm.athlete_id = $2`,
+    [gameDayId, athleteId]
+  )
+  return result.rows[0] || null
+}
+
+// ============= TEAM STATS =============
+
+export async function getTeamStats(teamId) {
+  const result = await query(`
+    SELECT 
+      COUNT(*) FILTER (WHERE m.winner = 'teamA' AND m.team_a_team_id = $1) +
+      COUNT(*) FILTER (WHERE m.winner = 'teamB' AND m.team_b_team_id = $1) as wins,
+      
+      COUNT(*) FILTER (WHERE m.winner = 'teamB' AND m.team_a_team_id = $1) +
+      COUNT(*) FILTER (WHERE m.winner = 'teamA' AND m.team_b_team_id = $1) as losses,
+      
+      COALESCE(SUM(CASE WHEN m.team_a_team_id = $1 THEN m.team_a_score ELSE 0 END), 0) +
+      COALESCE(SUM(CASE WHEN m.team_b_team_id = $1 THEN m.team_b_score ELSE 0 END), 0) as points_for,
+      
+      COALESCE(SUM(CASE WHEN m.team_a_team_id = $1 THEN m.team_b_score ELSE 0 END), 0) +
+      COALESCE(SUM(CASE WHEN m.team_b_team_id = $1 THEN m.team_a_score ELSE 0 END), 0) as points_against,
+      
+      COUNT(*) FILTER (WHERE 
+        (m.team_a_team_id = $1 OR m.team_b_team_id = $1) AND 
+        m.winner IS NOT NULL
+      ) as matches_played
+    FROM matches m
+    WHERE m.team_a_team_id = $1 OR m.team_b_team_id = $1
+  `, [teamId])
+  
+  const row = result.rows[0]
+  const wins = parseInt(row.wins) || 0
+  const losses = parseInt(row.losses) || 0
+  const pointsFor = parseInt(row.points_for) || 0
+  const pointsAgainst = parseInt(row.points_against) || 0
+  const matchesPlayed = parseInt(row.matches_played) || 0
+  
+  return {
+    wins,
+    losses,
+    pointsFor,
+    pointsAgainst,
+    pointDiff: pointsFor - pointsAgainst,
+    matchesPlayed,
+    winRate: matchesPlayed > 0 ? (wins / matchesPlayed) * 100 : 0
+  }
+}
+
+export async function getTeamStandings(gameDayId) {
+  const teams = await getTeamsByGameDay(gameDayId)
+  
+  const standings = await Promise.all(teams.map(async (team) => {
+    const members = await getTeamMembers(team.id)
+    const stats = await getTeamStats(team.id)
+    
+    return {
+      teamId: team.id,
+      teamNumber: team.team_number,
+      teamName: team.team_name,
+      teamColor: team.team_color,
+      members: members.map(m => ({
+        id: m.id,
+        name: m.name,
+        rank: m.rank
+      })),
+      ...stats,
+      goalProgress: Math.min(stats.winRate / 50, 1) // Progress towards 50% goal
+    }
+  }))
+  
+  // Sort by wins, then point diff
+  standings.sort((a, b) => {
+    if (b.wins !== a.wins) return b.wins - a.wins
+    return b.pointDiff - a.pointDiff
+  })
+  
+  return standings
 }
 
