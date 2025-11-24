@@ -107,19 +107,24 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-white">
       <header className="border-b border-[#377850] p-4">
-        <div className="flex justify-between items-center">
-          <h1 className="text-2xl font-bold">MatchPlay</h1>
-          <button
-            onClick={handleCreateGameDay}
-            className="bg-[#377850] text-white px-4 py-2 text-sm font-medium"
-          >
-            Create Game Day
-          </button>
-        </div>
+        <img 
+          src="/logo.svg" 
+          alt="MatchPlay" 
+          className="h-12 w-auto"
+        />
       </header>
 
       <main className="p-4">
-        <h2 className="text-lg font-semibold mb-4">Game Days</h2>
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-lg font-semibold">Game Days</h2>
+          <button
+            onClick={handleCreateGameDay}
+            className="bg-[#377850] text-white w-10 h-10 flex items-center justify-center text-2xl font-light hover:bg-[#2d5f40] transition-colors rounded leading-none"
+            title="Create Game Day"
+          >
+            +
+          </button>
+        </div>
 
         {error && (
           <div className="border border-red-500 bg-red-50 p-4 mb-4 text-sm text-red-800">

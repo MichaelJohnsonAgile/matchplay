@@ -206,7 +206,7 @@ export default function AthletesTab({ gameDayId, gameDay, onUpdate }) {
             </button>
           ) : (
             <button 
-              className="bg-black text-white px-4 py-2 text-sm font-medium hover:bg-gray-800 disabled:bg-gray-400 disabled:cursor-not-allowed"
+              className="bg-[#377850] text-white px-4 py-2 text-sm font-medium hover:bg-[#2a5f3c] disabled:bg-gray-400 disabled:cursor-not-allowed"
               onClick={handleGenerateDraw}
               disabled={isGenerating}
             >
@@ -214,7 +214,7 @@ export default function AthletesTab({ gameDayId, gameDay, onUpdate }) {
             </button>
           )}
           <button 
-            className="bg-black text-white px-4 py-2 text-sm font-medium hover:bg-gray-800 disabled:bg-gray-400 disabled:cursor-not-allowed"
+            className="bg-[#377850] text-white px-4 py-2 text-sm font-medium hover:bg-[#2a5f3c] disabled:bg-gray-400 disabled:cursor-not-allowed"
             onClick={() => setIsAddModalOpen(true)}
             disabled={hasMatches}
             title={hasMatches ? 'Cancel draw first to add athletes' : ''}
@@ -228,7 +228,7 @@ export default function AthletesTab({ gameDayId, gameDay, onUpdate }) {
         <div className="overflow-x-auto">
           <table className="w-full border-collapse text-sm">
               <thead>
-                <tr className="border-b border-black">
+                <tr className="border-b border-[#377850]">
                   <th className="p-2 text-left font-semibold">Rank</th>
                   <th className="p-2 text-center font-semibold">Initial Group</th>
                   <th className="p-2 text-left font-semibold">Athlete</th>
@@ -355,13 +355,13 @@ export default function AthletesTab({ gameDayId, gameDay, onUpdate }) {
         <div className="flex gap-3 pt-4 border-t border-gray-300">
           <button 
             onClick={() => setIsAddModalOpen(false)}
-            className="flex-1 border border-black px-4 py-2 text-sm font-medium"
+            className="flex-1 border border-[#377850] px-4 py-2 text-sm font-medium"
           >
             Cancel
           </button>
           <button 
             onClick={handleAddAthletes}
-            className="flex-1 bg-black text-white px-4 py-2 text-sm font-medium disabled:bg-gray-400"
+            className="flex-1 bg-[#377850] text-white px-4 py-2 text-sm font-medium disabled:bg-gray-400"
             disabled={selectedAthletes.length === 0}
           >
             Add {selectedAthletes.length > 0 ? `(${selectedAthletes.length})` : ''}

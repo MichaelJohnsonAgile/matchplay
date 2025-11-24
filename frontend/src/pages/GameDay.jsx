@@ -76,16 +76,20 @@ export default function GameDay() {
   return (
     <div className="min-h-screen bg-white">
       <header className="border-b border-[#377850] p-4">
+        <img 
+          src="/logo.svg" 
+          alt="MatchPlay" 
+          className="h-12 w-auto"
+        />
+        <div className="text-sm text-gray-600 mt-2">
+          {formatGameDayDate(gameDay.date)} • {gameDay.venue}
+        </div>
         <button
           onClick={() => navigate('/')}
-          className="text-sm mb-2 hover:underline"
+          className="border border-[#377850] px-3 py-1.5 text-sm font-medium mt-3 hover:bg-gray-50 transition-colors"
         >
           ← Back to Dashboard
         </button>
-        <h1 className="text-2xl font-bold">Game Day</h1>
-        <div className="text-sm text-gray-600 mt-1">
-          {formatGameDayDate(gameDay.date)} • {gameDay.venue}
-        </div>
       </header>
       <main className="p-4">
         <Tabs tabs={tabs} />

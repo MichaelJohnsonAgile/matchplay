@@ -293,7 +293,7 @@ export default function MatchesTab({ gameDayId, gameDay }) {
             id="group-select"
             value={selectedGroup}
             onChange={(e) => setSelectedGroup(e.target.value)}
-            className="border border-black px-4 py-2 text-sm font-medium min-w-[120px]"
+            className="border border-[#377850] px-4 py-2 text-sm font-medium min-w-[120px]"
           >
             {groupOptions.map((group) => (
               <option key={group.value} value={group.value}>
@@ -306,7 +306,7 @@ export default function MatchesTab({ gameDayId, gameDay }) {
             id="round-select"
             value={selectedRound}
             onChange={(e) => setSelectedRound(e.target.value)}
-            className="border border-black px-4 py-2 text-sm font-medium min-w-[120px]"
+            className="border border-[#377850] px-4 py-2 text-sm font-medium min-w-[120px]"
           >
             {rounds.map((round) => (
               <option key={round.value} value={round.value}>
@@ -362,7 +362,7 @@ export default function MatchesTab({ gameDayId, gameDay }) {
                   <h5 className="text-sm font-semibold mb-2">Group Standings</h5>
                   <table className="w-full border-collapse text-sm">
                     <thead>
-                      <tr className="border-b border-black">
+                      <tr className="border-b border-[#377850]">
                         <th className="p-2 text-center font-semibold">Pos</th>
                         <th className="p-2 text-left font-semibold">Athlete</th>
                         <th className="p-2 text-center font-semibold">W</th>
@@ -542,7 +542,7 @@ export default function MatchesTab({ gameDayId, gameDay }) {
                 min="0"
                 value={tempScores.teamA}
                 onChange={(e) => setTempScores(prev => ({ ...prev, teamA: e.target.value }))}
-                className="w-full h-12 rounded border border-gray-300 bg-gray-100 text-center text-2xl font-semibold focus:outline-none focus:border-black focus:bg-white"
+                className="w-full h-12 rounded border border-gray-300 bg-gray-100 text-center text-2xl font-semibold focus:outline-none focus:border-[#377850] focus:bg-white"
                 placeholder="0"
                 autoFocus
               />
@@ -560,7 +560,7 @@ export default function MatchesTab({ gameDayId, gameDay }) {
                 min="0"
                 value={tempScores.teamB}
                 onChange={(e) => setTempScores(prev => ({ ...prev, teamB: e.target.value }))}
-                className="w-full h-12 rounded border border-gray-300 bg-gray-100 text-center text-2xl font-semibold focus:outline-none focus:border-black focus:bg-white"
+                className="w-full h-12 rounded border border-gray-300 bg-gray-100 text-center text-2xl font-semibold focus:outline-none focus:border-[#377850] focus:bg-white"
                 placeholder="0"
               />
             </div>
@@ -569,13 +569,13 @@ export default function MatchesTab({ gameDayId, gameDay }) {
             <div className="flex gap-3 pt-4">
               <button 
                 onClick={closeModal}
-                className="flex-1 border border-black px-4 py-2 text-sm font-medium"
+                className="flex-1 border border-[#377850] px-4 py-2 text-sm font-medium"
               >
                 Cancel
               </button>
               <button 
                 onClick={saveScore}
-                className="flex-1 bg-black text-white px-4 py-2 text-sm font-medium"
+                className="flex-1 bg-[#377850] text-white px-4 py-2 text-sm font-medium"
               >
                 Save Score
               </button>

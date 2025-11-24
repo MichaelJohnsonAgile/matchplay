@@ -4,22 +4,22 @@
 
 @layer base {
   * {
-    @apply border-black;
+    @apply border-[#377850];
   }
   
   body {
-    @apply bg-white text-black antialiased;
+    @apply bg-white antialiased;
   }
 }
 
 @layer components {
   .btn {
-    @apply px-4 py-2 rounded border border-black bg-white text-black font-medium 
+    @apply px-4 py-2 rounded border border-[#377850] bg-white font-medium 
            active:bg-gray-100 transition-colors duration-150 touch-manipulation;
   }
   
   .btn-primary {
-    @apply bg-black text-white active:bg-gray-800;
+    @apply bg-[#377850] text-white active:bg-[#2a5f3c];
   }
   
   .tab {
@@ -28,7 +28,7 @@
   }
   
   .tab-active {
-    @apply border-black;
+    @apply border-[#377850];
   }
   
   .skeleton {
