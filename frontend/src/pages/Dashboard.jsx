@@ -142,7 +142,16 @@ export default function Dashboard() {
   }
 
   const getStatusText = (status, date) => {
-    // Check if date is today
+    // Check status first - completed takes priority
+    if (status === 'completed') {
+      return 'Completed'
+    }
+    
+    if (status === 'in-progress') {
+      return 'In Progress'
+    }
+    
+    // For upcoming, check if it's today
     if (status === 'upcoming') {
       const today = new Date()
       today.setHours(0, 0, 0, 0)
@@ -152,17 +161,11 @@ export default function Dashboard() {
       if (gameDate.getTime() === today.getTime()) {
         return 'Today'
       }
+      
+      return 'Upcoming'
     }
     
-    switch (status) {
-      case 'in-progress':
-        return 'In Progress'
-      case 'completed':
-        return 'Completed'
-      case 'upcoming':
-      default:
-        return 'Upcoming'
-    }
+    return 'Upcoming'
   }
 
   const shouldHighlight = (gameDay) => {
