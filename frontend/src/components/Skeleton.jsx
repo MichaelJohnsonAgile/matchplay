@@ -11,7 +11,7 @@ export function SkeletonTable({ rows = 5, cols = 6 }) {
     <div className="overflow-x-auto">
       <table className="w-full border-collapse">
         <thead>
-          <tr className="border-b border-black">
+          <tr className="border-b border-[#377850]">
             {Array.from({ length: cols }).map((_, i) => (
               <th key={i} className="p-3 text-left">
                 <SkeletonText className="w-16" />

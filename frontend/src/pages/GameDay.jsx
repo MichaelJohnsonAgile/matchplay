@@ -75,7 +75,7 @@ export default function GameDay() {
 
   return (
     <div className="min-h-screen bg-white">
-      <header className="border-b border-black p-4">
+      <header className="border-b border-[#377850] p-4">
         <button
           onClick={() => navigate('/')}
           className="text-sm mb-2 hover:underline"

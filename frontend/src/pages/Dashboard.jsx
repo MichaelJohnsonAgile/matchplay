@@ -88,7 +88,7 @@ export default function Dashboard() {
         return 'bg-gray-100 text-gray-800 border-gray-800'
       case 'upcoming':
       default:
-        return 'bg-white text-black border-black'
+        return 'bg-white text-[#377850] border-[#377850]'
     }
   }
 
@@ -106,12 +106,12 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-white">
-      <header className="border-b border-black p-4">
+      <header className="border-b border-[#377850] p-4">
         <div className="flex justify-between items-center">
           <h1 className="text-2xl font-bold">MatchPlay</h1>
           <button
             onClick={handleCreateGameDay}
-            className="bg-black text-white px-4 py-2 text-sm font-medium"
+            className="bg-[#377850] text-white px-4 py-2 text-sm font-medium"
           >
             Create Game Day
           </button>
@@ -134,11 +134,11 @@ export default function Dashboard() {
             <Skeleton className="h-32" />
           </div>
         ) : gameDays.length === 0 ? (
-          <div className="border border-black p-8 text-center mb-6">
+          <div className="border border-[#377850] p-8 text-center mb-6">
             <p className="text-gray-600 mb-4">No game days scheduled yet</p>
             <button
               onClick={handleCreateGameDay}
-              className="bg-black text-white px-6 py-3 text-sm font-medium"
+              className="bg-[#377850] text-white px-6 py-3 text-sm font-medium"
             >
               Create Your First Game Day
             </button>
@@ -149,7 +149,7 @@ export default function Dashboard() {
               <div
                 key={gameDay.id}
                 onClick={() => handleGameDayClick(gameDay.id)}
-                className="border border-black p-4 cursor-pointer hover:bg-gray-50 transition-colors"
+                className="border border-[#377850] p-4 cursor-pointer hover:bg-gray-50 transition-colors"
               >
                 <div className="flex justify-between items-start mb-2">
                   <div>
@@ -173,7 +173,7 @@ export default function Dashboard() {
             {!showAllGameDays && gameDays.length > filteredGameDays.length && (
               <button
                 onClick={() => setShowAllGameDays(true)}
-                className="w-full border border-black px-4 py-3 text-sm font-medium hover:bg-gray-50 transition-colors"
+                className="w-full border border-[#377850] px-4 py-3 text-sm font-medium hover:bg-gray-50 transition-colors"
               >
                 See All Game Days ({gameDays.length})
               </button>
@@ -182,7 +182,7 @@ export default function Dashboard() {
             {showAllGameDays && (
               <button
                 onClick={() => setShowAllGameDays(false)}
-                className="w-full border border-black px-4 py-3 text-sm font-medium hover:bg-gray-50 transition-colors"
+                className="w-full border border-[#377850] px-4 py-3 text-sm font-medium hover:bg-gray-50 transition-colors"
               >
                 Show Less
               </button>
@@ -203,13 +203,13 @@ export default function Dashboard() {
               <Skeleton className="h-12" />
             </div>
           ) : leaderboard.length === 0 ? (
-            <div className="border border-black p-8 text-center">
+            <div className="border border-[#377850] p-8 text-center">
               <p className="text-gray-600">No leaderboard data yet. Complete some matches to see rankings!</p>
             </div>
           ) : (
-            <div className="border border-black overflow-x-auto">
+            <div className="border border-[#377850] overflow-x-auto">
               <table className="w-full text-sm">
-                <thead className="border-b border-black bg-gray-50">
+                <thead className="border-b border-[#377850] bg-gray-50">
                   <tr>
                     <th className="text-left p-3 font-semibold">Rank</th>
                     <th className="text-left p-3 font-semibold">Athlete</th>
@@ -222,29 +222,40 @@ export default function Dashboard() {
                     <th className="text-center p-3 font-semibold">+/-</th>
                   </tr>
                 </thead>
-                <tbody>
-                  {leaderboard.map((athlete, index) => (
-                    <tr 
-                      key={athlete.id} 
-                      className="border-b border-gray-200 last:border-b-0 hover:bg-gray-50"
-                    >
-                      <td className="p-3 font-medium">{index + 1}</td>
-                      <td className="p-3 font-medium">{athlete.name}</td>
-                      <td className="p-3 text-center">{athlete.matchesPlayed}</td>
-                      <td className="p-3 text-center">{athlete.wins}</td>
-                      <td className="p-3 text-center">{athlete.losses}</td>
-                      <td className="p-3 text-center">{athlete.winPercentage.toFixed(0)}%</td>
-                      <td className="p-3 text-center">{athlete.pointsFor}</td>
-                      <td className="p-3 text-center">{athlete.pointsAgainst}</td>
-                      <td className={`p-3 text-center font-medium ${
-                        athlete.pointDifferential > 0 ? 'text-green-600' : 
-                        athlete.pointDifferential < 0 ? 'text-red-600' : ''
-                      }`}>
-                        {athlete.pointDifferential > 0 ? '+' : ''}{athlete.pointDifferential}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
+                 <tbody>
+                   {leaderboard.map((athlete, index) => {
+                     const stats = athlete.stats || {}
+                     const matchesPlayed = stats.matchesPlayed || 0
+                     const wins = stats.wins || 0
+                     const losses = stats.losses || 0
+                     const winPercentage = stats.winPercentage || 0
+                     const pointsFor = stats.pointsFor || 0
+                     const pointsAgainst = stats.pointsAgainst || 0
+                     const pointDifferential = stats.pointsDiff || 0
+                     
+                     return (
+                       <tr 
+                         key={athlete.id} 
+                         className="border-b border-gray-200 last:border-b-0 hover:bg-gray-50"
+                       >
+                         <td className="p-3 font-medium">{index + 1}</td>
+                         <td className="p-3 font-medium">{athlete.name}</td>
+                         <td className="p-3 text-center">{matchesPlayed}</td>
+                         <td className="p-3 text-center">{wins}</td>
+                         <td className="p-3 text-center">{losses}</td>
+                         <td className="p-3 text-center">{winPercentage.toFixed(0)}%</td>
+                         <td className="p-3 text-center">{pointsFor}</td>
+                         <td className="p-3 text-center">{pointsAgainst}</td>
+                         <td className={`p-3 text-center font-medium ${
+                           pointDifferential > 0 ? 'text-green-600' : 
+                           pointDifferential < 0 ? 'text-red-600' : ''
+                         }`}>
+                           {pointDifferential > 0 ? '+' : ''}{pointDifferential}
+                         </td>
+                       </tr>
+                     )
+                   })}
+                 </tbody>
               </table>
             </div>
           )}
@@ -328,7 +339,7 @@ function CreateGameDayForm({ onClose, onSuccess }) {
           value={formData.date}
           onChange={handleChange}
           required
-          className="w-full border border-black px-3 py-2 text-sm"
+          className="w-full border border-[#377850] px-3 py-2 text-sm"
         />
       </div>
 
@@ -343,7 +354,7 @@ function CreateGameDayForm({ onClose, onSuccess }) {
           onChange={handleChange}
           required
           placeholder="e.g., Central Pickleball Courts"
-          className="w-full border border-black px-3 py-2 text-sm"
+          className="w-full border border-[#377850] px-3 py-2 text-sm"
         />
       </div>
 
@@ -359,7 +370,7 @@ function CreateGameDayForm({ onClose, onSuccess }) {
               name="pointsToWin"
               value={formData.pointsToWin}
               onChange={handleChange}
-              className="w-full border border-black px-3 py-2 text-sm"
+              className="w-full border border-[#377850] px-3 py-2 text-sm"
             >
               <option value="9">9</option>
               <option value="11">11</option>
@@ -376,7 +387,7 @@ function CreateGameDayForm({ onClose, onSuccess }) {
               name="winByMargin"
               value={formData.winByMargin}
               onChange={handleChange}
-              className="w-full border border-black px-3 py-2 text-sm"
+              className="w-full border border-[#377850] px-3 py-2 text-sm"
             >
               <option value="1">1</option>
               <option value="2">2</option>
@@ -393,7 +404,7 @@ function CreateGameDayForm({ onClose, onSuccess }) {
           name="rounds"
           value={formData.rounds}
           onChange={handleChange}
-          className="w-full border border-black px-3 py-2 text-sm"
+          className="w-full border border-[#377850] px-3 py-2 text-sm"
         >
           <option value="2">2</option>
           <option value="3">3</option>
@@ -409,7 +420,7 @@ function CreateGameDayForm({ onClose, onSuccess }) {
           name="movementRule"
           value={formData.movementRule}
           onChange={handleChange}
-          className="w-full border border-black px-3 py-2 text-sm"
+          className="w-full border border-[#377850] px-3 py-2 text-sm"
         >
           <option value="auto">Auto (2 if any 5-player group, else 1)</option>
           <option value="1">1 up, 1 down</option>
@@ -421,14 +432,14 @@ function CreateGameDayForm({ onClose, onSuccess }) {
         <button
           type="button"
           onClick={onClose}
-          className="flex-1 border border-black px-4 py-2 text-sm font-medium"
+          className="flex-1 border border-[#377850] px-4 py-2 text-sm font-medium"
         >
           Cancel
         </button>
         <button
           type="submit"
           disabled={isSubmitting}
-          className="flex-1 bg-black text-white px-4 py-2 text-sm font-medium disabled:bg-gray-400"
+          className="flex-1 bg-[#377850] text-white px-4 py-2 text-sm font-medium disabled:bg-gray-400"
         >
           {isSubmitting ? 'Creating...' : 'Create Game Day'}
         </button>

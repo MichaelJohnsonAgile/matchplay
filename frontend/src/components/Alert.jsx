@@ -46,7 +46,7 @@ export function AlertModal({ isOpen, onClose, title, message, type = 'info' }) {
         <p className="text-gray-700 mb-6 whitespace-pre-line">{message}</p>
         <button 
           onClick={onClose}
-          className="w-full bg-black text-white px-4 py-2 text-sm font-medium hover:bg-gray-800"
+          className="w-full bg-[#377850] text-white px-4 py-2 text-sm font-medium hover:bg-[#2a5f3c]"
         >
           OK
         </button>
@@ -63,7 +63,7 @@ export function ConfirmModal({ isOpen, onClose, onConfirm, title, message, confi
 
   const confirmButtonClass = confirmColor === 'red' 
     ? 'flex-1 bg-red-600 text-white px-4 py-2 text-sm font-medium hover:bg-red-700'
-    : 'flex-1 bg-black text-white px-4 py-2 text-sm font-medium hover:bg-gray-800'
+    : 'flex-1 bg-[#377850] text-white px-4 py-2 text-sm font-medium hover:bg-[#2a5f3c]'
 
   return (
     <Modal isOpen={isOpen} onClose={onClose}>
@@ -78,7 +78,7 @@ export function ConfirmModal({ isOpen, onClose, onConfirm, title, message, confi
         <div className="flex gap-3">
           <button 
             onClick={onClose}
-            className="flex-1 border border-black px-4 py-2 text-sm font-medium hover:bg-gray-100"
+            className="flex-1 border border-[#377850] px-4 py-2 text-sm font-medium hover:bg-gray-100"
           >
             {cancelText}
           </button>

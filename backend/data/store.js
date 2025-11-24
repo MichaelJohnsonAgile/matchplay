@@ -8,15 +8,6 @@ export const store = {
       name: 'John Smith',
       email: 'john@example.com',
       status: 'active',
-      stats: {
-        matchesPlayed: 45,
-        wins: 28,
-        losses: 17,
-        winPercentage: 62.2,
-        pointsFor: 495,
-        pointsAgainst: 437,
-        pointsDiff: 58
-      },
       rank: 1
     },
     {
@@ -24,15 +15,6 @@ export const store = {
       name: 'Sarah Johnson',
       email: 'sarah@example.com',
       status: 'active',
-      stats: {
-        matchesPlayed: 43,
-        wins: 25,
-        losses: 18,
-        winPercentage: 58.1,
-        pointsFor: 470,
-        pointsAgainst: 442,
-        pointsDiff: 28
-      },
       rank: 2
     },
     {
@@ -40,15 +22,6 @@ export const store = {
       name: 'Mike Davis',
       email: 'mike@example.com',
       status: 'active',
-      stats: {
-        matchesPlayed: 43,
-        wins: 24,
-        losses: 19,
-        winPercentage: 55.8,
-        pointsFor: 460,
-        pointsAgainst: 445,
-        pointsDiff: 15
-      },
       rank: 3
     },
     {
@@ -56,15 +29,6 @@ export const store = {
       name: 'Emily Wilson',
       email: 'emily@example.com',
       status: 'active',
-      stats: {
-        matchesPlayed: 43,
-        wins: 22,
-        losses: 21,
-        winPercentage: 51.2,
-        pointsFor: 450,
-        pointsAgainst: 448,
-        pointsDiff: 2
-      },
       rank: 4
     },
     {
@@ -72,15 +36,6 @@ export const store = {
       name: 'David Brown',
       email: 'david@example.com',
       status: 'active',
-      stats: {
-        matchesPlayed: 43,
-        wins: 21,
-        losses: 22,
-        winPercentage: 48.8,
-        pointsFor: 448,
-        pointsAgainst: 450,
-        pointsDiff: -2
-      },
       rank: 5
     },
     {
@@ -88,15 +43,6 @@ export const store = {
       name: 'Lisa Anderson',
       email: 'lisa@example.com',
       status: 'active',
-      stats: {
-        matchesPlayed: 43,
-        wins: 20,
-        losses: 23,
-        winPercentage: 46.5,
-        pointsFor: 445,
-        pointsAgainst: 455,
-        pointsDiff: -10
-      },
       rank: 6
     },
     {
@@ -104,15 +50,6 @@ export const store = {
       name: 'Tom Martinez',
       email: 'tom@example.com',
       status: 'active',
-      stats: {
-        matchesPlayed: 43,
-        wins: 19,
-        losses: 24,
-        winPercentage: 44.2,
-        pointsFor: 440,
-        pointsAgainst: 460,
-        pointsDiff: -20
-      },
       rank: 7
     },
     {
@@ -120,15 +57,6 @@ export const store = {
       name: 'Jennifer Taylor',
       email: 'jennifer@example.com',
       status: 'active',
-      stats: {
-        matchesPlayed: 43,
-        wins: 18,
-        losses: 25,
-        winPercentage: 41.9,
-        pointsFor: 435,
-        pointsAgainst: 465,
-        pointsDiff: -30
-      },
       rank: 8
     },
     {
@@ -136,15 +64,6 @@ export const store = {
       name: 'Robert Garcia',
       email: 'robert@example.com',
       status: 'active',
-      stats: {
-        matchesPlayed: 43,
-        wins: 17,
-        losses: 26,
-        winPercentage: 39.5,
-        pointsFor: 430,
-        pointsAgainst: 470,
-        pointsDiff: -40
-      },
       rank: 9
     },
     {
@@ -152,15 +71,6 @@ export const store = {
       name: 'Maria Rodriguez',
       email: 'maria@example.com',
       status: 'active',
-      stats: {
-        matchesPlayed: 43,
-        wins: 16,
-        losses: 27,
-        winPercentage: 37.2,
-        pointsFor: 425,
-        pointsAgainst: 475,
-        pointsDiff: -50
-      },
       rank: 10
     },
     {
@@ -168,15 +78,6 @@ export const store = {
       name: 'Chris Lee',
       email: 'chris@example.com',
       status: 'active',
-      stats: {
-        matchesPlayed: 43,
-        wins: 15,
-        losses: 28,
-        winPercentage: 34.9,
-        pointsFor: 420,
-        pointsAgainst: 480,
-        pointsDiff: -60
-      },
       rank: 11
     },
     {
@@ -184,15 +85,6 @@ export const store = {
       name: 'Amanda White',
       email: 'amanda@example.com',
       status: 'active',
-      stats: {
-        matchesPlayed: 43,
-        wins: 14,
-        losses: 29,
-        winPercentage: 32.6,
-        pointsFor: 415,
-        pointsAgainst: 485,
-        pointsDiff: -70
-      },
       rank: 12
     }
   ],

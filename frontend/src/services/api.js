@@ -1,6 +1,8 @@
 // API service layer for backend communication
 // Base URL will come from environment variable
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api'
+const API_BASE_URL = import.meta.env.VITE_API_URL 
+  ? `${import.meta.env.VITE_API_URL}/api`
+  : 'http://localhost:3001/api'
 
 // Helper function for making API requests
 async function apiRequest(endpoint, options = {}) {
