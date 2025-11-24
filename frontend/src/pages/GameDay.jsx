@@ -149,7 +149,7 @@ export default function GameDay() {
   if (isTeamsMode) {
     tabs.push({
       label: 'Teams',
-      content: <TeamsTab gameDayId={id} settings={gameDay.settings} />,
+      content: <TeamsTab gameDayId={id} settings={gameDay.settings} onUpdate={loadGameDay} />,
       disabled: false
     })
   }

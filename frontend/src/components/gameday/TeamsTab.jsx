@@ -36,7 +36,7 @@ const TEAM_COLORS = {
   }
 }
 
-export function TeamsTab({ gameDayId, settings }) {
+export function TeamsTab({ gameDayId, settings, onUpdate }) {
   const [teams, setTeams] = useState([])
   const [standings, setStandings] = useState([])
   const [loading, setLoading] = useState(true)
@@ -99,6 +99,7 @@ export function TeamsTab({ gameDayId, settings }) {
     try {
       await gameDayAPI.generateDraw(gameDayId)
       await loadData() // Reload to get matches and standings
+      if (onUpdate) onUpdate() // Notify parent to reload
     } catch (err) {
       console.error('Error generating draw:', err)
       setError(err.message)
