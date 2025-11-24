@@ -20,12 +20,32 @@ async function apiRequest(endpoint, options = {}) {
     const response = await fetch(url, config)
     
     if (!response.ok) {
-      throw new Error(`API Error: ${response.status} ${response.statusText}`)
+      // Try to parse error response body
+      let errorData
+      try {
+        errorData = await response.json()
+      } catch (e) {
+        // If response body is not JSON
+        errorData = { error: `${response.status} ${response.statusText}` }
+      }
+      
+      const error = new Error(errorData.message || errorData.error || `API Error: ${response.status}`)
+      error.status = response.status
+      error.data = errorData
+      throw error
     }
     
     return await response.json()
   } catch (error) {
     console.error('API Request failed:', error)
+    
+    // If it's a network error (no response)
+    if (!error.status) {
+      const netError = new Error('Network error. Unable to connect to server. The service may be starting up.')
+      netError.originalError = error
+      throw netError
+    }
+    
     throw error
   }
 }

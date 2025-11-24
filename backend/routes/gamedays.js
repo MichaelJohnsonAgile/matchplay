@@ -282,16 +282,24 @@ gameDayRoutes.get('/:id/draw-preview', async (req, res) => {
 // POST /api/gamedays/:id/generate-draw - Generate match draw
 gameDayRoutes.post('/:id/generate-draw', async (req, res) => {
   try {
+    console.log(`Generating draw for game day: ${req.params.id}`)
+    
     const gameDay = await db.getGameDayById(req.params.id)
     if (!gameDay) {
+      console.log(`Game day not found: ${req.params.id}`)
       return res.status(404).json({ error: 'Game day not found' })
     }
+    
+    console.log(`Game day found: ${gameDay.id}`)
     
     const athletes = await db.getGameDayAthletes(req.params.id)
     const numAthletes = athletes.length
     
+    console.log(`Found ${numAthletes} athletes`)
+    
     // Validate minimum athletes
     if (numAthletes < 8) {
+      console.log(`Not enough athletes: ${numAthletes}`)
       return res.status(400).json({ 
         error: 'At least 8 athletes required to generate draw',
         currentCount: numAthletes
@@ -301,18 +309,23 @@ gameDayRoutes.post('/:id/generate-draw', async (req, res) => {
     console.log('Athletes sorted by rank:', athletes.map(a => `${a.name} (Rank ${a.rank})`))
     
     // Clear existing matches for this game day
+    console.log('Clearing existing matches...')
     await db.deleteMatchesByGameDay(req.params.id)
     
     // Calculate group allocation
+    console.log('Calculating group allocation...')
     const allocation = calculateGroupAllocation(numAthletes)
     
     // Check if allocation failed
     if (allocation.error) {
+      console.log(`Allocation error: ${allocation.description}`)
       return res.status(400).json({ 
         error: allocation.description,
         suggestion: 'Add or remove athletes to reach a valid group size'
       })
     }
+    
+    console.log(`Allocation: ${allocation.description}`)
     
     // Create groups based on allocation
     const groups = []
@@ -324,15 +337,20 @@ gameDayRoutes.post('/:id/generate-draw', async (req, res) => {
       athleteIndex += groupSize
     }
     
+    console.log(`Created ${groups.length} groups`)
+    
     // Generate matches for Round 1
     let totalMatches = 0
     for (let groupIndex = 0; groupIndex < groups.length; groupIndex++) {
+      console.log(`Generating matches for group ${groupIndex + 1}...`)
       const matches = generateGroupMatches(groups[groupIndex], req.params.id, 1, groupIndex + 1)
       for (const match of matches) {
         await db.createMatch(match)
         totalMatches++
       }
     }
+    
+    console.log(`✅ Generated ${totalMatches} matches`)
     
     res.json({ 
       message: 'Draw generated successfully',
@@ -343,8 +361,31 @@ gameDayRoutes.post('/:id/generate-draw', async (req, res) => {
       success: true
     })
   } catch (error) {
-    console.error('Error generating draw:', error)
-    res.status(500).json({ error: 'Failed to generate draw' })
+    console.error('❌ Error generating draw:', error)
+    console.error('Error stack:', error.stack)
+    
+    // Provide more specific error messages
+    if (error.code === 'ECONNREFUSED') {
+      return res.status(503).json({ 
+        error: 'Database connection failed',
+        message: 'Unable to connect to database. Please check DATABASE_URL environment variable.',
+        details: error.message
+      })
+    }
+    
+    if (error.code === '42P01') {
+      return res.status(503).json({ 
+        error: 'Database not initialized',
+        message: 'Database tables not found. Please run: npm run db:init',
+        details: error.message
+      })
+    }
+    
+    res.status(500).json({ 
+      error: 'Failed to generate draw',
+      message: error.message,
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    })
   }
 })
 

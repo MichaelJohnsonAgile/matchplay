@@ -1,6 +1,13 @@
 import pg from 'pg'
 const { Pool } = pg
 
+// Check for DATABASE_URL
+if (!process.env.DATABASE_URL) {
+  console.warn('⚠️  WARNING: DATABASE_URL environment variable not set!')
+  console.warn('   The application will not be able to store data persistently.')
+  console.warn('   See DEPLOYMENT_GUIDE.md for setup instructions.')
+}
+
 // Database connection configuration
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -9,7 +16,7 @@ const pool = new Pool({
   } : false,
   max: 20, // Maximum number of clients in the pool
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 2000,
+  connectionTimeoutMillis: 5000, // Increased from 2000
 })
 
 // Test connection on startup

@@ -130,7 +130,8 @@ export default function AthletesTab({ gameDayId, gameDay, onUpdate }) {
 
     setIsGenerating(true)
     try {
-      await gameDayAPI.generateDraw(gameDayId)
+      const response = await gameDayAPI.generateDraw(gameDayId)
+      console.log('Generate draw response:', response)
       if (onUpdate) onUpdate()
       setAlertModal({
         isOpen: true,
@@ -139,11 +140,27 @@ export default function AthletesTab({ gameDayId, gameDay, onUpdate }) {
         type: 'success'
       })
     } catch (error) {
-      console.error(error)
+      console.error('Generate draw error:', error)
+      
+      // Try to extract error message from response
+      let errorMessage = 'Error generating draw. Please try again.'
+      
+      if (error.message) {
+        if (error.message.includes('Database connection failed')) {
+          errorMessage = 'Database connection error. The service may be starting up. Please wait a moment and try again.'
+        } else if (error.message.includes('Database not initialized')) {
+          errorMessage = 'Database not initialized. Please contact the administrator.'
+        } else if (error.message.includes('503')) {
+          errorMessage = 'Service temporarily unavailable. The backend may be waking up. Please try again in a few seconds.'
+        } else {
+          errorMessage = error.message
+        }
+      }
+      
       setAlertModal({
         isOpen: true,
         title: 'Error',
-        message: 'Error generating draw. Please try again.',
+        message: errorMessage,
         type: 'error'
       })
     } finally {
@@ -231,7 +248,7 @@ export default function AthletesTab({ gameDayId, gameDay, onUpdate }) {
                 <tr className="border-b border-gray-200">
                   <th className="p-2 text-left font-semibold">Rank</th>
                   <th className="p-2 text-left font-semibold">Athlete</th>
-                  <th className="p-2 text-center font-semibold">Played</th>
+                  <th className="p-2 text-center font-semibold">P</th>
                   <th className="p-2 text-center font-semibold">W</th>
                   <th className="p-2 text-center font-semibold">L</th>
                   <th className="p-2 text-center font-semibold">+</th>

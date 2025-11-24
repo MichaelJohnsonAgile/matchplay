@@ -99,6 +99,8 @@ Click **"Advanced"** and add environment variable:
 2. Wait for build and deployment (2-4 minutes)
 3. Once deployed, you'll get a URL like: `https://matchplay.onrender.com`
 
+**Note**: The `frontend/public/_redirects` file handles SPA routing so page refreshes work correctly.
+
 ---
 
 ## Part 3: Update Frontend to Use Environment Variable
@@ -235,10 +237,26 @@ After deployment, save these URLs:
 
 ## Troubleshooting
 
+### Page Refresh Returns "Not Found" (404)
+This happens when the static site doesn't redirect all routes to `index.html`.
+
+**Solution**: Make sure `frontend/public/_redirects` file exists with:
+```
+/*    /index.html   200
+```
+
+After adding this file:
+1. Commit and push to GitHub
+2. Render will automatically redeploy
+3. Page refreshes should now work
+
 ### Frontend Can't Connect to Backend
 1. Check the backend URL in Render environment variables
 2. Verify backend is running: visit `/health` endpoint
 3. Check browser console for CORS errors
+
+### Generate Draw Button Not Working
+See detailed troubleshooting in: **[RENDER_TROUBLESHOOTING.md](RENDER_TROUBLESHOOTING.md)**
 
 ### Backend Won't Start
 1. Check Render logs in the dashboard
