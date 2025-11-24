@@ -255,7 +255,8 @@ export default function AthletesTab({ gameDayId, gameDay, onUpdate, isAdminMode 
           <table className="w-full border-collapse text-sm">
               <thead>
                 <tr className="border-b border-gray-200">
-                  <th className="p-2 text-left font-semibold">Rank</th>
+                  <th className="p-2 text-center font-semibold">Season Rank</th>
+                  <th className="p-2 text-center font-semibold">Pos</th>
                   <th className="p-2 text-left font-semibold">Athlete</th>
                   <th className="p-2 text-center font-semibold">P</th>
                   <th className="p-2 text-center font-semibold">W</th>
@@ -272,7 +273,10 @@ export default function AthletesTab({ gameDayId, gameDay, onUpdate, isAdminMode 
                 [1, 2, 3, 4, 5, 6, 7, 8].map((num) => (
                   <tr key={num} className="border-b border-gray-200">
                     <td className="p-2">
-                      <div className="skeleton h-4 w-8"></div>
+                      <div className="skeleton h-4 w-8 mx-auto"></div>
+                    </td>
+                    <td className="p-2">
+                      <div className="skeleton h-4 w-8 mx-auto"></div>
                     </td>
                     <td className="p-2">
                       <div className="skeleton h-4 w-32"></div>
@@ -300,15 +304,28 @@ export default function AthletesTab({ gameDayId, gameDay, onUpdate, isAdminMode 
                 ))
               ) : gameDayAthletes.length === 0 ? (
                 <tr>
-                  <td colSpan="9" className="p-8 text-center text-gray-500">
+                  <td colSpan="10" className="p-8 text-center text-gray-500">
                     No players signed up yet. Click "Join Game Day" to add yourself!
                   </td>
                 </tr>
               ) : (
-                // Sort athletes by rank before displaying
-                [...gameDayAthletes].sort((a, b) => a.rank - b.rank).map((athlete, index) => (
+                // Sort athletes by: 1) Wins DESC, 2) Point differential DESC, 3) Season rank ASC
+                [...gameDayAthletes].sort((a, b) => {
+                  const winsA = a.stats?.wins || 0
+                  const winsB = b.stats?.wins || 0
+                  const diffA = (a.stats?.pointsFor || 0) - (a.stats?.pointsAgainst || 0)
+                  const diffB = (b.stats?.pointsFor || 0) - (b.stats?.pointsAgainst || 0)
+                  
+                  // 1. Sort by wins first
+                  if (winsB !== winsA) return winsB - winsA
+                  // 2. Then by point differential
+                  if (diffB !== diffA) return diffB - diffA
+                  // 3. Finally by season rank (lower rank number = better)
+                  return a.rank - b.rank
+                }).map((athlete, index) => (
                   <tr key={athlete.id} className="border-b border-gray-200">
-                    <td className="p-2">{athlete.rank}</td>
+                    <td className="p-2 text-center">{athlete.rank}</td>
+                    <td className="p-2 text-center font-semibold">{index + 1}</td>
                     <td className="p-2">{athlete.name}</td>
                     <td className="p-2 text-center">{athlete.stats.matchesPlayed}</td>
                     <td className="p-2 text-center">{athlete.stats.wins}</td>
