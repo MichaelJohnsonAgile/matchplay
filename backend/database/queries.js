@@ -367,8 +367,9 @@ export async function getLeaderboard() {
       AND m.team_a_score IS NOT NULL 
       AND m.team_b_score IS NOT NULL
     )
+    WHERE a.status = 'active'
     GROUP BY a.id, a.name, a.rank
-    ORDER BY wins DESC, (points_for - points_against) DESC, points_for DESC
+    ORDER BY 5 DESC, (6 - 7) DESC, 6 DESC
   `)
   
   return result.rows.map(row => ({
