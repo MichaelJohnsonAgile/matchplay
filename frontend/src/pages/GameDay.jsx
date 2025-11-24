@@ -1,6 +1,7 @@
 import { useParams, useNavigate } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import Tabs from '../components/Tabs'
+import Modal from '../components/Modal'
 import AthletesTab from '../components/gameday/AthletesTab'
 import MatchesTab from '../components/gameday/MatchesTab'
 import { gameDayAPI } from '../services/api'
@@ -12,6 +13,8 @@ export default function GameDay() {
   const [gameDay, setGameDay] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
   
   useEffect(() => {
     loadGameDay()
@@ -28,6 +31,20 @@ export default function GameDay() {
       setError('Failed to load game day')
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const handleDeleteGameDay = async () => {
+    try {
+      setIsDeleting(true)
+      await gameDayAPI.delete(id)
+      // Navigate back to dashboard
+      navigate('/')
+    } catch (err) {
+      console.error('Failed to delete game day:', err)
+      setError('Failed to delete game day. Please try again.')
+      setIsDeleting(false)
+      setShowDeleteModal(false)
     }
   }
 
@@ -58,7 +75,7 @@ export default function GameDay() {
     )
   }
 
-  const hasMatches = gameDay.matches && gameDay.matches.length > 0
+  const hasMatches = gameDay.matchCount > 0
   
   const tabs = [
     {
@@ -84,16 +101,63 @@ export default function GameDay() {
         <div className="text-sm text-gray-600 mt-2">
           {formatGameDayDate(gameDay.date)} • {gameDay.venue}
         </div>
-        <button
-          onClick={() => navigate('/')}
-          className="border border-gray-200 px-3 py-1.5 text-sm font-medium mt-3 hover:bg-gray-50 transition-colors"
-        >
-          ← Back to Dashboard
-        </button>
+        <div className="flex gap-2 mt-3">
+          <button
+            onClick={() => navigate('/')}
+            className="border border-gray-200 px-3 py-1.5 text-sm font-medium hover:bg-gray-50 transition-colors"
+          >
+            ← Back to Dashboard
+          </button>
+          {!hasMatches && (
+            <button
+              onClick={() => setShowDeleteModal(true)}
+              className="border border-red-500 text-red-600 px-3 py-1.5 text-sm font-medium hover:bg-red-50 transition-colors"
+            >
+              Delete Game Day
+            </button>
+          )}
+        </div>
       </header>
       <main className="p-4">
         <Tabs tabs={tabs} />
       </main>
+
+      <Modal
+        isOpen={showDeleteModal}
+        onClose={() => setShowDeleteModal(false)}
+        title="Delete Game Day"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600">
+            Are you sure you want to delete this game day?
+          </p>
+          <div className="bg-gray-50 border border-gray-200 p-3 text-sm">
+            <div className="font-medium">{formatGameDayDate(gameDay.date)}</div>
+            <div className="text-gray-600">{gameDay.venue}</div>
+          </div>
+          <p className="text-sm text-red-600 font-medium">
+            This action cannot be undone.
+          </p>
+          <div className="flex gap-2 pt-2">
+            <button
+              type="button"
+              onClick={() => setShowDeleteModal(false)}
+              disabled={isDeleting}
+              className="flex-1 border border-gray-200 px-4 py-2 text-sm font-medium hover:bg-gray-50 disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleDeleteGameDay}
+              disabled={isDeleting}
+              className="flex-1 bg-red-600 text-white px-4 py-2 text-sm font-medium hover:bg-red-700 disabled:bg-gray-400"
+            >
+              {isDeleting ? 'Deleting...' : 'Delete Game Day'}
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   )
 }
