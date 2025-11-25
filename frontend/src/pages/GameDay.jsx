@@ -196,12 +196,14 @@ export default function GameDay() {
               >
                 Edit
               </button>
-              <button
-                onClick={() => setShowDeleteModal(true)}
-                className="border border-red-500 text-red-600 px-3 py-1.5 text-sm font-medium hover:bg-red-50 transition-colors"
-              >
-                Delete
-              </button>
+              {gameDay.status !== 'completed' && (
+                <button
+                  onClick={() => setShowDeleteModal(true)}
+                  className="border border-red-500 text-red-600 px-3 py-1.5 text-sm font-medium hover:bg-red-50 transition-colors"
+                >
+                  Delete
+                </button>
+              )}
             </>
           )}
         </div>

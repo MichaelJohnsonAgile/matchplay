@@ -258,8 +258,8 @@ export default function Dashboard() {
                     : 'border-gray-200 hover:bg-gray-50'
                 }`}
               >
-                {/* Delete button */}
-                {isAdminMode && (
+                {/* Delete button - hidden for completed game days */}
+                {isAdminMode && gameDay.status !== 'completed' && (
                   <button
                     onClick={(e) => handleDeleteGameDay(e, gameDay.id, gameDay)}
                     className="absolute top-3 right-3 w-8 h-8 flex items-center justify-center text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors opacity-0 group-hover:opacity-100"
