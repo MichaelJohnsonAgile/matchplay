@@ -893,7 +893,7 @@ async function generateTeamsMatches(gameDayId, gameDay, res) {
           id: `match-${uuidv4()}`,
           gameDayId,
           round: 1,
-          group: 0, // Not used in teams mode
+          group: 1, // Set to 1 so matches display correctly in MatchesTab
           court: null,
           teamA: {
             players: [pair0.player1.id, pair0.player2.id],
@@ -933,7 +933,7 @@ async function generateTeamsMatches(gameDayId, gameDay, res) {
               id: `match-${uuidv4()}`,
               gameDayId,
               round: 1,
-              group: 0,
+              group: 1, // Set to 1 so matches display correctly in MatchesTab
               court: null,
               teamA: {
                 players: [pairA.player1.id, pairA.player2.id],

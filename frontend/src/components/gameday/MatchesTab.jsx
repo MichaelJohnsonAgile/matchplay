@@ -85,11 +85,14 @@ export default function MatchesTab({ gameDayId, gameDay, isAdminMode = false }) 
     groupOptions.push({ value: String(i), label: `Group ${i}` })
   }
   
-  // Get matches for selected round and group
-  const filteredMatches = matches.filter(m => 
-    m.round === parseInt(selectedRound) && 
-    m.group === parseInt(selectedGroup)
-  )
+  // Get matches for selected round and group (teams mode shows all matches)
+  const isTeamsMode = gameDay?.settings?.format === 'teams'
+  const filteredMatches = isTeamsMode 
+    ? matches  // Show all matches for teams mode
+    : matches.filter(m => 
+        m.round === parseInt(selectedRound) && 
+        m.group === parseInt(selectedGroup)
+      )
   
   // Calculate group leaderboard for selected round and group
   const calculateGroupLeaderboard = () => {
@@ -291,38 +294,42 @@ export default function MatchesTab({ gameDayId, gameDay, isAdminMode = false }) 
           <div className="flex justify-between items-center flex-wrap gap-3">
         <h2 className="text-xl font-semibold">Match Draw</h2>
         
-        {/* Round and Group Selectors */}
+        {/* Round and Group Selectors - hide group for teams mode */}
         <div className="flex items-center gap-3 flex-wrap">
-          <select
-            id="group-select"
-            value={selectedGroup}
-            onChange={(e) => setSelectedGroup(e.target.value)}
-            className="border border-gray-200 px-4 py-2 text-sm font-medium min-w-[120px]"
-          >
-            {groupOptions.map((group) => (
-              <option key={group.value} value={group.value}>
-                {group.label}
-              </option>
-            ))}
-          </select>
+          {gameDay?.settings?.format !== 'teams' && (
+            <select
+              id="group-select"
+              value={selectedGroup}
+              onChange={(e) => setSelectedGroup(e.target.value)}
+              className="border border-gray-200 px-4 py-2 text-sm font-medium min-w-[120px]"
+            >
+              {groupOptions.map((group) => (
+                <option key={group.value} value={group.value}>
+                  {group.label}
+                </option>
+              ))}
+            </select>
+          )}
           
-          <select
-            id="round-select"
-            value={selectedRound}
-            onChange={(e) => setSelectedRound(e.target.value)}
-            className="border border-gray-200 px-4 py-2 text-sm font-medium min-w-[120px]"
-          >
-            {rounds.map((round) => (
-              <option key={round.value} value={round.value}>
-                {round.label}
-              </option>
-            ))}
-          </select>
+          {gameDay?.settings?.format !== 'teams' && (
+            <select
+              id="round-select"
+              value={selectedRound}
+              onChange={(e) => setSelectedRound(e.target.value)}
+              className="border border-gray-200 px-4 py-2 text-sm font-medium min-w-[120px]"
+            >
+              {rounds.map((round) => (
+                <option key={round.value} value={round.value}>
+                  {round.label}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
       </div>
       
-      {/* Generate Next Round Button */}
-      {canGenerateNextRound && (
+      {/* Generate Next Round Button - only for group mode */}
+      {canGenerateNextRound && !isTeamsMode && (
         <div className="bg-green-50 border border-green-500 p-4 rounded">
           <div className="flex items-center justify-between gap-4 flex-wrap">
             <div>
@@ -352,7 +359,9 @@ export default function MatchesTab({ gameDayId, gameDay, isAdminMode = false }) 
       {/* Selected Group Matches */}
       <div className="space-y-6">
         <div className="p-4">
-          <h4 className="text-md font-semibold mb-3">Round {selectedRound} - Group {selectedGroup}</h4>
+          <h4 className="text-md font-semibold mb-3">
+            {isTeamsMode ? 'Team Matches' : `Round ${selectedRound} - Group ${selectedGroup}`}
+          </h4>
           
           {isLoading ? (
             <div className="space-y-4">
@@ -361,12 +370,14 @@ export default function MatchesTab({ gameDayId, gameDay, isAdminMode = false }) 
             </div>
           ) : filteredMatches.length === 0 ? (
             <div className="border border-gray-200 p-8 text-center text-gray-500">
-              No matches generated yet. Generate the draw from the Athletes tab.
+              {isTeamsMode 
+                ? 'No matches generated yet. Generate the draw from the Teams tab.'
+                : 'No matches generated yet. Generate the draw from the Athletes tab.'}
             </div>
           ) : (
             <>
-              {/* Group Leaderboard */}
-              {groupLeaderboard.length > 0 && (
+              {/* Group Leaderboard - only for group mode */}
+              {groupLeaderboard.length > 0 && !isTeamsMode && (
                 <div className="mb-6 overflow-x-auto">
                   <h5 className="text-sm font-semibold mb-2">Group Standings</h5>
                   <table className="w-full border-collapse text-sm">
