@@ -254,7 +254,7 @@ export default function Dashboard() {
                 onClick={() => handleGameDayClick(gameDay.id)}
                 className={`border p-4 cursor-pointer transition-colors relative group ${
                   isHighlighted 
-                    ? 'border-[#377850] border-2 bg-green-50 hover:bg-green-100' 
+                    ? 'border-red-500 border-2 bg-red-50 hover:bg-red-100' 
                     : 'border-gray-200 hover:bg-gray-50'
                 }`}
               >
@@ -298,7 +298,7 @@ export default function Dashboard() {
                 </div>
                 {isHighlighted && (
                   <div className="flex justify-end">
-                    <span className="inline-flex items-center text-sm font-medium text-[#377850]">
+                    <span className="inline-flex items-center text-sm font-medium text-red-500">
                       Go to Game Day
                       <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
