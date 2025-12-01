@@ -768,10 +768,10 @@ export async function getTeamStandings(gameDayId) {
     }
   }))
   
-  // Sort by wins, then point diff
+  // Sort by point difference (primary), then wins (tiebreaker)
   standings.sort((a, b) => {
-    if (b.wins !== a.wins) return b.wins - a.wins
-    return b.pointDiff - a.pointDiff
+    if (b.pointDiff !== a.pointDiff) return b.pointDiff - a.pointDiff
+    return b.wins - a.wins
   })
   
   return standings

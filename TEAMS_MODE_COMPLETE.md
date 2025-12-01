@@ -73,7 +73,7 @@
 
 #### 3. Team Leaderboard
 **File:** `frontend/src/components/gameday/TeamLeaderboard.jsx`
-- ✅ Team standings sorted by wins then point diff
+- ✅ Team standings sorted by point diff then wins
 - ✅ Bullet chart style win rate progress bar
 - ✅ 50% win rate goal visualization
 - ✅ Team color-coded headers

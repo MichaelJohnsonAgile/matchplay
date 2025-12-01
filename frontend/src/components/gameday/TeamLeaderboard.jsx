@@ -98,58 +98,58 @@ export function TeamLeaderboard({ gameDayId }) {
                   {hasPlayed && (
                     <div className="text-right">
                       <div className="text-4xl font-bold">
-                        {team.wins}-{team.losses}
+                        {team.pointDiff > 0 ? '+' : ''}{team.pointDiff}
                       </div>
                       <div className="text-sm opacity-90">
-                        {team.winRate.toFixed(1)}% Win Rate
+                        Point Difference
                       </div>
                     </div>
                   )}
                 </div>
               </div>
               
-              {/* Win Rate Progress Bar (Bullet Chart Style) */}
+              {/* Point Difference Bar */}
               {hasPlayed && (
                 <div className={`${colorScheme.bgLight} p-4`}>
                   <div className="flex justify-between text-sm mb-2">
-                    <span className="font-semibold">Win Rate Progress to 50% Goal</span>
-                    <span className="font-bold">{team.winRate.toFixed(1)}%</span>
+                    <span className="font-semibold">Point Difference</span>
+                    <span className="font-bold">{team.pointDiff > 0 ? '+' : ''}{team.pointDiff} pts</span>
                   </div>
                   
+                  {/* Horizontal bar showing positive/negative point diff */}
                   <div className="relative h-10 bg-gray-200 rounded-lg overflow-hidden">
-                    {/* Goal marker at 50% */}
+                    {/* Centre line (zero point) */}
                     <div 
                       className="absolute h-full w-0.5 bg-gray-600 z-20"
                       style={{ left: '50%' }}
                     >
                       <div className="absolute -top-7 left-1/2 transform -translate-x-1/2 text-xs font-semibold text-gray-600 whitespace-nowrap">
-                        Goal: 50%
+                        0
                       </div>
                     </div>
                     
-                    {/* Progress bar */}
-                    <div 
-                      className={`h-full transition-all duration-500 ${
-                        team.winRate >= 50 ? 'bg-green-500' : colorScheme.progressBar
-                      }`}
-                      style={{ width: `${Math.min(team.winRate, 100)}%` }}
-                    />
-                    
-                    {/* Current value marker */}
-                    <div 
-                      className="absolute h-full w-1 bg-black z-10"
-                      style={{ left: `${Math.min(team.winRate, 100)}%` }}
-                    />
+                    {/* Point diff bar - grows from centre */}
+                    {team.pointDiff !== 0 && (
+                      <div 
+                        className={`absolute h-full transition-all duration-500 ${
+                          team.pointDiff > 0 ? 'bg-green-500' : 'bg-red-500'
+                        }`}
+                        style={{ 
+                          left: team.pointDiff > 0 ? '50%' : `${50 - Math.min(Math.abs(team.pointDiff), 50)}%`,
+                          width: `${Math.min(Math.abs(team.pointDiff), 50)}%`
+                        }}
+                      />
+                    )}
                   </div>
                   
-                  {/* Progress message */}
+                  {/* Status message */}
                   <div className="mt-2 text-xs text-gray-600">
-                    {team.winRate >= 50 ? (
-                      <span className="text-green-700 font-semibold">Goal reached! Excellent performance!</span>
-                    ) : team.winRate >= 40 ? (
-                      <span className="text-blue-700">Close to goal - keep it up!</span>
+                    {team.pointDiff > 0 ? (
+                      <span className="text-green-700 font-semibold">Leading on points!</span>
+                    ) : team.pointDiff < 0 ? (
+                      <span className="text-red-700">Behind on points - time to rally!</span>
                     ) : (
-                      <span>Working towards the 50% win rate goal</span>
+                      <span>Even on points</span>
                     )}
                   </div>
                 </div>
@@ -157,6 +157,16 @@ export function TeamLeaderboard({ gameDayId }) {
               
               {/* Stats Grid */}
               <div className="grid grid-cols-4 gap-4 p-4 bg-white">
+                <div className="text-center">
+                  <div className={`text-3xl font-bold ${
+                    team.pointDiff > 0 ? 'text-green-600' : 
+                    team.pointDiff < 0 ? 'text-red-600' : 
+                    'text-gray-600'
+                  }`}>
+                    {team.pointDiff > 0 ? '+' : ''}{team.pointDiff}
+                  </div>
+                  <div className="text-xs text-gray-500 mt-1">Point Diff</div>
+                </div>
                 <div className="text-center">
                   <div className="text-3xl font-bold text-green-600">{team.wins}</div>
                   <div className="text-xs text-gray-500 mt-1">Wins</div>
@@ -168,16 +178,6 @@ export function TeamLeaderboard({ gameDayId }) {
                 <div className="text-center">
                   <div className="text-3xl font-bold text-blue-600">{team.pointsFor}</div>
                   <div className="text-xs text-gray-500 mt-1">Points For</div>
-                </div>
-                <div className="text-center">
-                  <div className={`text-3xl font-bold ${
-                    team.pointDiff > 0 ? 'text-green-600' : 
-                    team.pointDiff < 0 ? 'text-red-600' : 
-                    'text-gray-600'
-                  }`}>
-                    {team.pointDiff > 0 ? '+' : ''}{team.pointDiff}
-                  </div>
-                  <div className="text-xs text-gray-500 mt-1">Point Diff</div>
                 </div>
               </div>
               

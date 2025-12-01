@@ -11,6 +11,7 @@ export default function AthletesTab({ gameDayId, gameDay, onUpdate, isAdminMode 
   const [gameDayAthletes, setGameDayAthletes] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [matches, setMatches] = useState([])
+  const [addModalSearch, setAddModalSearch] = useState('')
   
   // Alert and confirm modals
   const [alertModal, setAlertModal] = useState({ isOpen: false, title: '', message: '', type: 'info' })
@@ -44,6 +45,7 @@ export default function AthletesTab({ gameDayId, gameDay, onUpdate, isAdminMode 
       await athleteAPI.addToGameDay(gameDayId, selectedAthletes)
       setSelectedAthletes([])
       setIsAddModalOpen(false)
+      setAddModalSearch('')
       loadData()
       if (onUpdate) onUpdate()
       setAlertModal({
@@ -370,12 +372,25 @@ export default function AthletesTab({ gameDayId, gameDay, onUpdate, isAdminMode 
       </div>
       
       {/* Add Athletes Modal */}
-      <Modal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)}>
+      <Modal isOpen={isAddModalOpen} onClose={() => { setIsAddModalOpen(false); setAddModalSearch(''); }}>
         <h3 className="text-xl font-semibold mb-4">Join This Game Day</h3>
+        
+        {/* Search bar */}
+        <div className="mb-4">
+          <input
+            type="text"
+            placeholder="Search athletes..."
+            value={addModalSearch}
+            onChange={(e) => setAddModalSearch(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-[#377850] focus:border-transparent"
+          />
+        </div>
         
         <div className="space-y-3 max-h-96 overflow-y-auto mb-4">
           {allAthletes
             .filter(athlete => !gameDayAthletes.some(gda => gda.id === athlete.id))
+            .filter(athlete => athlete.name.toLowerCase().includes(addModalSearch.toLowerCase()))
+            .sort((a, b) => a.name.localeCompare(b.name))
             .map((athlete) => (
             <label 
               key={athlete.id}
@@ -396,11 +411,18 @@ export default function AthletesTab({ gameDayId, gameDay, onUpdate, isAdminMode 
               Everyone is already signed up for this game day!
             </div>
           )}
+          {allAthletes.filter(athlete => !gameDayAthletes.some(gda => gda.id === athlete.id)).length > 0 &&
+           allAthletes.filter(athlete => !gameDayAthletes.some(gda => gda.id === athlete.id))
+             .filter(athlete => athlete.name.toLowerCase().includes(addModalSearch.toLowerCase())).length === 0 && (
+            <div className="text-center text-gray-500 py-8">
+              No athletes match your search.
+            </div>
+          )}
         </div>
         
         <div className="flex gap-3 pt-4 border-t border-gray-200">
           <button 
-            onClick={() => setIsAddModalOpen(false)}
+            onClick={() => { setIsAddModalOpen(false); setAddModalSearch(''); }}
             className="flex-1 border border-gray-200 px-4 py-2 text-sm font-medium"
           >
             Cancel

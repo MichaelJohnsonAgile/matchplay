@@ -21,9 +21,10 @@ Add a new "Teams" game mode where athletes are split into 2 or 4 teams, with eac
 - **Single round only** (no multi-round movement)
 
 ### Leaderboard
-- **Team KPI view** with bullet charts
-- Track: Team wins, losses, win rate %, point differential
-- Visual goal: Racing towards >50% win rate
+- **Team KPI view** with point difference visualisation
+- Track: Point differential (primary), wins, losses, points for
+- Ranking: Teams sorted by **sum of point difference** (wins as tiebreaker)
+- Visual: Bar chart showing positive/negative point diff from centre line
 
 ### User Flow
 1. Create Game Day → Select "Teams" format
@@ -114,7 +115,7 @@ getAthleteTeam(gameDayId, athleteId) // Which team is athlete on?
 
 // Team Stats
 getTeamStats(teamId) // wins, losses, pointsFor, pointsAgainst, winRate
-getTeamStandings(gameDayId) // All teams with stats, sorted by wins then diff
+getTeamStandings(gameDayId) // All teams with stats, sorted by point diff then wins
 ```
 
 ### 2.2 Teams Route (routes/teams.js)
@@ -408,10 +409,10 @@ async function getTeamStandings(gameDayId) {
     }
   }))
   
-  // Sort by wins, then point diff
+  // Sort by point difference (primary), then wins (tiebreaker)
   standings.sort((a, b) => {
-    if (b.wins !== a.wins) return b.wins - a.wins
-    return b.pointDiff - a.pointDiff
+    if (b.pointDiff !== a.pointDiff) return b.pointDiff - a.pointDiff
+    return b.wins - a.wins
   })
   
   return standings
