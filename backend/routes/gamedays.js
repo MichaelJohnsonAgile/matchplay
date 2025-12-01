@@ -171,6 +171,9 @@ gameDayRoutes.get('/:id/athletes', async (req, res) => {
       return res.status(404).json({ error: 'Game day not found' })
     }
     
+    // Sync ranks from season leaderboard to ensure ranks are current
+    await db.syncAthleteRanks()
+    
     const athletes = await db.getGameDayAthletes(req.params.id)
     
     // Get game-day-specific stats for each athlete
@@ -301,6 +304,10 @@ gameDayRoutes.post('/:id/generate-draw', async (req, res) => {
     }
     
     console.log(`Game day found: ${gameDay.id}, format: ${gameDay.format}`)
+    
+    // Sync athlete ranks from main leaderboard before generating draw
+    console.log('Syncing athlete ranks from season leaderboard...')
+    await db.syncAthleteRanks()
     
     const athletes = await db.getGameDayAthletes(req.params.id)
     const numAthletes = athletes.length

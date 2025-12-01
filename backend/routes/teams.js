@@ -18,7 +18,10 @@ teamsRoutes.post('/:id/teams/generate', async (req, res) => {
       return res.status(400).json({ error: 'Game day must be in teams format' })
     }
     
-    // Get athletes sorted by rank
+    // Sync athlete ranks from main leaderboard before generating teams
+    await db.syncAthleteRanks()
+    
+    // Get athletes sorted by rank (now reflecting current season standings)
     const athletes = await db.getGameDayAthletes(gameDayId)
     const numAthletes = athletes.length
     const numberOfTeams = gameDay.number_of_teams

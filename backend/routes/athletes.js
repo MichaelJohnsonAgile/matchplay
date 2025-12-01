@@ -8,6 +8,10 @@ export const athleteRoutes = express.Router()
 athleteRoutes.get('/', async (req, res) => {
   try {
     const { status } = req.query
+    
+    // Sync ranks from season leaderboard to ensure ranks are current
+    await db.syncAthleteRanks()
+    
     const athletes = await db.getAllAthletes(status)
     res.json(athletes)
   } catch (error) {
