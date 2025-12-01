@@ -831,41 +831,79 @@ async function generateNextRound(gameDayId, previousRound, gameDay) {
 }
 
 // Helper function to schedule matches into rounds (ensures no player plays twice per round)
+// Optimised to maximise matches per round
 function scheduleMatchesIntoRounds(matches) {
+  // Get all unique players to calculate max matches per round
+  const allPlayers = new Set()
+  for (const match of matches) {
+    match.teamA.players.forEach(p => allPlayers.add(p))
+    match.teamB.players.forEach(p => allPlayers.add(p))
+  }
+  const numPlayers = allPlayers.size
+  const maxMatchesPerRound = Math.floor(numPlayers / 4)
+  
+  console.log(`Scheduling ${matches.length} matches for ${numPlayers} players (max ${maxMatchesPerRound} matches/round)`)
+  
+  // Create a working copy of matches (unscheduled)
+  const unscheduled = [...matches]
+  const scheduled = []
+  
   // Track which players are busy in each round
   const roundPlayers = {} // { roundNumber: Set of playerIds }
+  const roundMatchCount = {} // { roundNumber: count }
   
-  // Process each match and assign to earliest available round
-  for (const match of matches) {
-    const matchPlayers = [
-      ...match.teamA.players,
-      ...match.teamB.players
-    ]
+  let currentRound = 1
+  
+  // Keep scheduling until all matches are assigned
+  while (unscheduled.length > 0) {
+    // Initialise current round tracking
+    if (!roundPlayers[currentRound]) {
+      roundPlayers[currentRound] = new Set()
+      roundMatchCount[currentRound] = 0
+    }
     
-    // Find the earliest round where none of these players are busy
-    let round = 1
-    while (true) {
-      if (!roundPlayers[round]) {
-        roundPlayers[round] = new Set()
-      }
+    // Try to fill this round to capacity
+    let addedAnyThisPass = false
+    
+    for (let i = unscheduled.length - 1; i >= 0; i--) {
+      const match = unscheduled[i]
+      const matchPlayers = [
+        ...match.teamA.players,
+        ...match.teamB.players
+      ]
       
-      // Check if any player in this match is already playing in this round
-      const hasConflict = matchPlayers.some(playerId => roundPlayers[round].has(playerId))
+      // Check if this match can fit in the current round
+      const hasConflict = matchPlayers.some(playerId => roundPlayers[currentRound].has(playerId))
       
-      if (!hasConflict) {
+      if (!hasConflict && roundMatchCount[currentRound] < maxMatchesPerRound) {
         // Assign this match to this round
-        match.round = round
-        // Mark all players as busy in this round
-        matchPlayers.forEach(playerId => roundPlayers[round].add(playerId))
-        break
+        match.round = currentRound
+        matchPlayers.forEach(playerId => roundPlayers[currentRound].add(playerId))
+        roundMatchCount[currentRound]++
+        
+        // Move from unscheduled to scheduled
+        scheduled.push(match)
+        unscheduled.splice(i, 1)
+        addedAnyThisPass = true
       }
-      
-      // Try next round
-      round++
+    }
+    
+    // If round is full or we couldn't add any more matches, move to next round
+    if (roundMatchCount[currentRound] >= maxMatchesPerRound || !addedAnyThisPass) {
+      console.log(`Round ${currentRound}: ${roundMatchCount[currentRound]} matches`)
+      currentRound++
     }
   }
   
-  return matches
+  // Log final round if it has matches
+  if (roundMatchCount[currentRound] && roundMatchCount[currentRound] > 0) {
+    console.log(`Round ${currentRound}: ${roundMatchCount[currentRound]} matches`)
+  }
+  
+  // Sort scheduled matches by round for cleaner output
+  scheduled.sort((a, b) => a.round - b.round)
+  
+  return scheduled
 }
 
 // Helper function to generate matches for teams mode
@@ -918,90 +956,93 @@ async function generateTeamsMatches(gameDayId, gameDay, res) {
     const unscheduledMatches = []
     const numberOfTeams = teams.length
     
+    // Helper to create a match object
+    const createMatch = (pairA, pairB) => ({
+      id: `match-${uuidv4()}`,
+      gameDayId,
+      round: null, // Will be assigned by scheduler
+      group: 1,
+      court: null,
+      teamA: {
+        players: [pairA.player1.id, pairA.player2.id],
+        score: null
+      },
+      teamB: {
+        players: [pairB.player1.id, pairB.player2.id],
+        score: null
+      },
+      teamATeamId: pairA.team.id,
+      teamBTeamId: pairB.team.id,
+      bye: null,
+      status: 'pending',
+      winner: null,
+      timestamp: null
+    })
+    
+    // Fisher-Yates shuffle to randomise match order for better scheduling
+    const shuffleArray = (array) => {
+      const shuffled = [...array]
+      for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1))
+        ;[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
+      }
+      return shuffled
+    }
+    
     if (numberOfTeams === 2) {
       // Simple 2-team matchup
       const team0Pairs = teamPartnerships[0].pairs
       const team1Pairs = teamPartnerships[1].pairs
       
-      // Sort by combined rank
-      const sortedTeam0 = [...team0Pairs].sort((a, b) => a.combinedRank - b.combinedRank)
-      const sortedTeam1 = [...team1Pairs].sort((a, b) => a.combinedRank - b.combinedRank)
+      // Shuffle pairs from each team to vary which pairs play each other
+      // This breaks the strict rank-matching and allows better round packing
+      const shuffledTeam0 = shuffleArray(team0Pairs)
+      const shuffledTeam1 = shuffleArray(team1Pairs)
       
-      // Pair them up (match similar ranks)
-      const maxMatches = Math.max(sortedTeam0.length, sortedTeam1.length)
+      // Generate matches - cycle through pairs
+      const maxMatches = Math.max(shuffledTeam0.length, shuffledTeam1.length)
       
       for (let i = 0; i < maxMatches; i++) {
-        const pair0 = sortedTeam0[i % sortedTeam0.length]
-        const pair1 = sortedTeam1[i % sortedTeam1.length]
-        
-        unscheduledMatches.push({
-          id: `match-${uuidv4()}`,
-          gameDayId,
-          round: null, // Will be assigned by scheduler
-          group: 1,
-          court: null,
-          teamA: {
-            players: [pair0.player1.id, pair0.player2.id],
-            score: null
-          },
-          teamB: {
-            players: [pair1.player1.id, pair1.player2.id],
-            score: null
-          },
-          teamATeamId: pair0.team.id,
-          teamBTeamId: pair1.team.id,
-          bye: null,
-          status: 'pending',
-          winner: null,
-          timestamp: null
-        })
+        const pair0 = shuffledTeam0[i % shuffledTeam0.length]
+        const pair1 = shuffledTeam1[i % shuffledTeam1.length]
+        unscheduledMatches.push(createMatch(pair0, pair1))
       }
       
     } else if (numberOfTeams === 4) {
       // Round-robin team matchups
+      // Collect all team-vs-team matchups
+      const teamMatchups = []
       for (let i = 0; i < teamPartnerships.length; i++) {
         for (let j = i + 1; j < teamPartnerships.length; j++) {
-          const teamA = teamPartnerships[i]
-          const teamB = teamPartnerships[j]
-          
-          // Sort pairs by rank
-          const sortedA = [...teamA.pairs].sort((a, b) => a.combinedRank - b.combinedRank)
-          const sortedB = [...teamB.pairs].sort((a, b) => a.combinedRank - b.combinedRank)
-          
-          const maxMatches = Math.max(sortedA.length, sortedB.length)
-          
-          for (let k = 0; k < maxMatches; k++) {
-            const pairA = sortedA[k % sortedA.length]
-            const pairB = sortedB[k % sortedB.length]
-            
-            unscheduledMatches.push({
-              id: `match-${uuidv4()}`,
-              gameDayId,
-              round: null, // Will be assigned by scheduler
-              group: 1,
-              court: null,
-              teamA: {
-                players: [pairA.player1.id, pairA.player2.id],
-                score: null
-              },
-              teamB: {
-                players: [pairB.player1.id, pairB.player2.id],
-                score: null
-              },
-              teamATeamId: pairA.team.id,
-              teamBTeamId: pairB.team.id,
-              bye: null,
-              status: 'pending',
-              winner: null,
-              timestamp: null
-            })
-          }
+          teamMatchups.push({ teamA: teamPartnerships[i], teamB: teamPartnerships[j] })
+        }
+      }
+      
+      // Shuffle team matchups to interleave different team combinations
+      const shuffledMatchups = shuffleArray(teamMatchups)
+      
+      // Generate matches for each team-vs-team combination
+      for (const { teamA, teamB } of shuffledMatchups) {
+        // Shuffle pairs within each team
+        const shuffledA = shuffleArray(teamA.pairs)
+        const shuffledB = shuffleArray(teamB.pairs)
+        
+        const maxMatches = Math.max(shuffledA.length, shuffledB.length)
+        
+        for (let k = 0; k < maxMatches; k++) {
+          const pairA = shuffledA[k % shuffledA.length]
+          const pairB = shuffledB[k % shuffledB.length]
+          unscheduledMatches.push(createMatch(pairA, pairB))
         }
       }
     }
     
+    // Final shuffle to further break up patterns
+    const shuffledMatches = shuffleArray(unscheduledMatches)
+    console.log(`Generated ${shuffledMatches.length} matches, shuffled for optimal round packing...`)
+    
     // Schedule matches into rounds (no player plays twice in same round)
-    const scheduledMatches = scheduleMatchesIntoRounds(unscheduledMatches)
+    const scheduledMatches = scheduleMatchesIntoRounds(shuffledMatches)
     
     console.log(`Creating ${scheduledMatches.length} matches across ${Math.max(...scheduledMatches.map(m => m.round))} rounds...`)
     
@@ -1027,3 +1068,4 @@ async function generateTeamsMatches(gameDayId, gameDay, res) {
     throw error
   }
 }
+

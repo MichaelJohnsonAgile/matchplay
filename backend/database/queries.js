@@ -334,6 +334,7 @@ export async function getGameDayStats(gameDayId) {
 // Calculate leaderboard from all completed matches
 // Group weighting for Weighted Win %
 // Group 1 (top court) = 1.5x, Group 2 = 1.25x, Group 3+ = 1.0x
+// Note: Teams mode matches are NOT weighted (courts don't represent difficulty in teams mode)
 const GROUP_WEIGHTS = {
   1: 1.5,
   2: 1.25,
@@ -367,21 +368,22 @@ export async function getLeaderboard() {
         THEN m.id 
         ELSE NULL 
       END) as losses,
-      -- Wins by group for weighted calculation
+      -- Wins by group for weighted calculation (only standard mode gets group weighting)
       COUNT(DISTINCT CASE 
-        WHEN m.match_group = 1 AND (
+        WHEN m.match_group = 1 AND g.game_format = 'standard' AND (
           (m.winner = 'teamA' AND (m.team_a_player1 = a.id OR m.team_a_player2 = a.id))
           OR (m.winner = 'teamB' AND (m.team_b_player1 = a.id OR m.team_b_player2 = a.id))
         ) THEN m.id ELSE NULL 
       END) as group1_wins,
       COUNT(DISTINCT CASE 
-        WHEN m.match_group = 2 AND (
+        WHEN m.match_group = 2 AND g.game_format = 'standard' AND (
           (m.winner = 'teamA' AND (m.team_a_player1 = a.id OR m.team_a_player2 = a.id))
           OR (m.winner = 'teamB' AND (m.team_b_player1 = a.id OR m.team_b_player2 = a.id))
         ) THEN m.id ELSE NULL 
       END) as group2_wins,
+      -- Group 3+ wins OR any wins from teams mode (no court difficulty weighting for teams)
       COUNT(DISTINCT CASE 
-        WHEN m.match_group >= 3 AND (
+        WHEN (m.match_group >= 3 OR g.game_format = 'teams') AND (
           (m.winner = 'teamA' AND (m.team_a_player1 = a.id OR m.team_a_player2 = a.id))
           OR (m.winner = 'teamB' AND (m.team_b_player1 = a.id OR m.team_b_player2 = a.id))
         ) THEN m.id ELSE NULL 
@@ -407,6 +409,7 @@ export async function getLeaderboard() {
       AND m.team_a_score IS NOT NULL 
       AND m.team_b_score IS NOT NULL
     )
+    LEFT JOIN gamedays g ON m.gameday_id = g.id
     WHERE a.status = 'active'
     GROUP BY a.id, a.name, a.rank
   `)
@@ -466,6 +469,7 @@ export async function getLeaderboard() {
 // Sync athlete ranks based on overall performance (Weighted Win %, then +/- tie-breaker)
 export async function syncAthleteRanks() {
   // Get all athletes with their stats including group-level wins for weighting
+  // Note: Teams mode matches don't get group weighting (courts don't represent difficulty)
   const result = await query(`
     SELECT 
       a.id,
@@ -476,21 +480,22 @@ export async function syncAthleteRanks() {
         THEN m.id 
         ELSE NULL 
       END) as matches_played,
-      -- Wins by group for weighted calculation
+      -- Wins by group for weighted calculation (only standard mode gets group weighting)
       COUNT(DISTINCT CASE 
-        WHEN m.match_group = 1 AND (
+        WHEN m.match_group = 1 AND g.game_format = 'standard' AND (
           (m.winner = 'teamA' AND (m.team_a_player1 = a.id OR m.team_a_player2 = a.id))
           OR (m.winner = 'teamB' AND (m.team_b_player1 = a.id OR m.team_b_player2 = a.id))
         ) THEN m.id ELSE NULL 
       END) as group1_wins,
       COUNT(DISTINCT CASE 
-        WHEN m.match_group = 2 AND (
+        WHEN m.match_group = 2 AND g.game_format = 'standard' AND (
           (m.winner = 'teamA' AND (m.team_a_player1 = a.id OR m.team_a_player2 = a.id))
           OR (m.winner = 'teamB' AND (m.team_b_player1 = a.id OR m.team_b_player2 = a.id))
         ) THEN m.id ELSE NULL 
       END) as group2_wins,
+      -- Group 3+ wins OR any wins from teams mode (no court difficulty weighting for teams)
       COUNT(DISTINCT CASE 
-        WHEN m.match_group >= 3 AND (
+        WHEN (m.match_group >= 3 OR g.game_format = 'teams') AND (
           (m.winner = 'teamA' AND (m.team_a_player1 = a.id OR m.team_a_player2 = a.id))
           OR (m.winner = 'teamB' AND (m.team_b_player1 = a.id OR m.team_b_player2 = a.id))
         ) THEN m.id ELSE NULL 
@@ -516,6 +521,7 @@ export async function syncAthleteRanks() {
       AND m.team_a_score IS NOT NULL 
       AND m.team_b_score IS NOT NULL
     )
+    LEFT JOIN gamedays g ON m.gameday_id = g.id
     WHERE a.status = 'active'
     GROUP BY a.id, a.name
   `)
