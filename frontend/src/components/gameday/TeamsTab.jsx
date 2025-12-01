@@ -36,7 +36,7 @@ const TEAM_COLORS = {
   }
 }
 
-export function TeamsTab({ gameDayId, settings, onUpdate }) {
+export function TeamsTab({ gameDayId, settings, onUpdate, isAdminMode = false }) {
   const [teams, setTeams] = useState([])
   const [standings, setStandings] = useState([])
   const [loading, setLoading] = useState(true)
@@ -128,7 +128,8 @@ export function TeamsTab({ gameDayId, settings, onUpdate }) {
         </div>
         
         <div className="flex gap-2">
-          {teams.length === 0 && (
+          {/* Admin-only: Generate Teams button (when no teams exist) */}
+          {isAdminMode && teams.length === 0 && (
             <button
               onClick={handleGenerateTeams}
               disabled={generating}
@@ -138,7 +139,8 @@ export function TeamsTab({ gameDayId, settings, onUpdate }) {
             </button>
           )}
           
-          {teams.length > 0 && !hasMatches && (
+          {/* Admin-only: Regenerate Teams and Generate Draw buttons */}
+          {isAdminMode && teams.length > 0 && !hasMatches && (
             <>
               <button
                 onClick={handleGenerateTeams}
@@ -157,6 +159,7 @@ export function TeamsTab({ gameDayId, settings, onUpdate }) {
             </>
           )}
           
+          {/* Refresh button - available to everyone */}
           {teams.length > 0 && hasMatches && (
             <button
               onClick={loadData}
@@ -179,8 +182,12 @@ export function TeamsTab({ gameDayId, settings, onUpdate }) {
       
       {teams.length === 0 && !error && (
         <div className="border border-blue-500 bg-blue-50 p-4 text-blue-800 rounded">
-          <p className="font-semibold mb-2">Get Started</p>
-          <p>Add athletes first, then generate teams. Teams will be balanced using a serpentine draft based on player rankings.</p>
+          <p className="font-semibold mb-2">{isAdminMode ? 'Get Started' : 'Teams Not Generated'}</p>
+          <p>
+            {isAdminMode 
+              ? 'Add athletes first, then generate teams. Teams will be balanced using a serpentine draft based on player rankings.'
+              : 'Teams have not been generated yet. Please wait for the admin to set up teams.'}
+          </p>
         </div>
       )}
       
