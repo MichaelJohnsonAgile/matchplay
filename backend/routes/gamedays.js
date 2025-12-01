@@ -830,6 +830,44 @@ async function generateNextRound(gameDayId, previousRound, gameDay) {
   }
 }
 
+// Helper function to schedule matches into rounds (ensures no player plays twice per round)
+function scheduleMatchesIntoRounds(matches) {
+  // Track which players are busy in each round
+  const roundPlayers = {} // { roundNumber: Set of playerIds }
+  
+  // Process each match and assign to earliest available round
+  for (const match of matches) {
+    const matchPlayers = [
+      ...match.teamA.players,
+      ...match.teamB.players
+    ]
+    
+    // Find the earliest round where none of these players are busy
+    let round = 1
+    while (true) {
+      if (!roundPlayers[round]) {
+        roundPlayers[round] = new Set()
+      }
+      
+      // Check if any player in this match is already playing in this round
+      const hasConflict = matchPlayers.some(playerId => roundPlayers[round].has(playerId))
+      
+      if (!hasConflict) {
+        // Assign this match to this round
+        match.round = round
+        // Mark all players as busy in this round
+        matchPlayers.forEach(playerId => roundPlayers[round].add(playerId))
+        break
+      }
+      
+      // Try next round
+      round++
+    }
+  }
+  
+  return matches
+}
+
 // Helper function to generate matches for teams mode
 async function generateTeamsMatches(gameDayId, gameDay, res) {
   try {
@@ -876,8 +914,8 @@ async function generateTeamsMatches(gameDayId, gameDay, res) {
     
     console.log('Partnerships per team:', teamPartnerships.map(tp => `Team ${tp.team.team_number}: ${tp.pairs.length} pairs`))
     
-    // Generate match pairings
-    const matches = []
+    // Generate match pairings (without round assignment yet)
+    const unscheduledMatches = []
     const numberOfTeams = teams.length
     
     if (numberOfTeams === 2) {
@@ -896,11 +934,11 @@ async function generateTeamsMatches(gameDayId, gameDay, res) {
         const pair0 = sortedTeam0[i % sortedTeam0.length]
         const pair1 = sortedTeam1[i % sortedTeam1.length]
         
-        matches.push({
+        unscheduledMatches.push({
           id: `match-${uuidv4()}`,
           gameDayId,
-          round: 1,
-          group: 1, // Set to 1 so matches display correctly in MatchesTab
+          round: null, // Will be assigned by scheduler
+          group: 1,
           court: null,
           teamA: {
             players: [pair0.player1.id, pair0.player2.id],
@@ -936,11 +974,11 @@ async function generateTeamsMatches(gameDayId, gameDay, res) {
             const pairA = sortedA[k % sortedA.length]
             const pairB = sortedB[k % sortedB.length]
             
-            matches.push({
+            unscheduledMatches.push({
               id: `match-${uuidv4()}`,
               gameDayId,
-              round: 1,
-              group: 1, // Set to 1 so matches display correctly in MatchesTab
+              round: null, // Will be assigned by scheduler
+              group: 1,
               court: null,
               teamA: {
                 players: [pairA.player1.id, pairA.player2.id],
@@ -962,18 +1000,23 @@ async function generateTeamsMatches(gameDayId, gameDay, res) {
       }
     }
     
-    console.log(`Creating ${matches.length} matches...`)
+    // Schedule matches into rounds (no player plays twice in same round)
+    const scheduledMatches = scheduleMatchesIntoRounds(unscheduledMatches)
+    
+    console.log(`Creating ${scheduledMatches.length} matches across ${Math.max(...scheduledMatches.map(m => m.round))} rounds...`)
     
     // Save matches to database
-    for (const match of matches) {
+    for (const match of scheduledMatches) {
       await db.createMatch(match)
     }
     
-    console.log(`✅ Generated ${matches.length} team matches`)
+    const totalRounds = Math.max(...scheduledMatches.map(m => m.round))
+    console.log(`✅ Generated ${scheduledMatches.length} team matches across ${totalRounds} rounds`)
     
     return res.json({
       message: 'Teams matches generated successfully',
-      matchesGenerated: matches.length,
+      matchesGenerated: scheduledMatches.length,
+      rounds: totalRounds,
       teams: numberOfTeams,
       format: 'teams',
       success: true
