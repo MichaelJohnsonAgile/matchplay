@@ -64,6 +64,11 @@ matchRoutes.put('/:id/score', async (req, res) => {
       await db.updateGameDay(gameDayId, { status: 'completed' })
     }
     
+    // Auto-sync athlete ranks if a match was completed
+    if (updateData.winner) {
+      await db.syncAthleteRanks()
+    }
+    
     res.json(updatedMatch)
   } catch (error) {
     console.error('Error updating match score:', error)

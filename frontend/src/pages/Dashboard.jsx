@@ -368,6 +368,7 @@ export default function Dashboard() {
                     <th className="text-center p-3 font-semibold">W</th>
                     <th className="text-center p-3 font-semibold">L</th>
                     <th className="text-center p-3 font-semibold">Win %</th>
+                    <th className="text-center p-3 font-semibold bg-[#377850]/10" title="Group 1: 1.5x, Group 2: 1.25x, Group 3+: 1x">Weighted %</th>
                     <th className="text-center p-3 font-semibold">+</th>
                     <th className="text-center p-3 font-semibold">-</th>
                     <th className="text-center p-3 font-semibold">+/-</th>
@@ -380,6 +381,7 @@ export default function Dashboard() {
                      const wins = stats.wins || 0
                      const losses = stats.losses || 0
                      const winPercentage = stats.winPercentage || 0
+                     const weightedWinPercentage = stats.weightedWinPercentage || 0
                      const pointsFor = stats.pointsFor || 0
                      const pointsAgainst = stats.pointsAgainst || 0
                      const pointDifferential = stats.pointsDiff || 0
@@ -395,6 +397,9 @@ export default function Dashboard() {
                          <td className="p-3 text-center">{wins}</td>
                          <td className="p-3 text-center">{losses}</td>
                          <td className="p-3 text-center">{winPercentage.toFixed(0)}%</td>
+                         <td className="p-3 text-center font-medium bg-[#377850]/5" title={`G1: ${stats.group1Wins || 0}W, G2: ${stats.group2Wins || 0}W, G3+: ${stats.group3PlusWins || 0}W`}>
+                           {weightedWinPercentage.toFixed(0)}%
+                         </td>
                          <td className="p-3 text-center">{pointsFor}</td>
                          <td className="p-3 text-center">{pointsAgainst}</td>
                          <td className={`p-3 text-center font-medium ${
