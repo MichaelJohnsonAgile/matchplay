@@ -386,19 +386,6 @@ export async function getLeaderboard() {
           OR (m.winner = 'teamB' AND (m.team_b_player1 = a.id OR m.team_b_player2 = a.id))
         ) THEN m.id ELSE NULL 
       END) as group3plus_wins,
-      -- Matches by group for weighted calculation
-      COUNT(DISTINCT CASE 
-        WHEN m.match_group = 1 AND m.team_a_score IS NOT NULL AND m.team_b_score IS NOT NULL 
-        THEN m.id ELSE NULL 
-      END) as group1_matches,
-      COUNT(DISTINCT CASE 
-        WHEN m.match_group = 2 AND m.team_a_score IS NOT NULL AND m.team_b_score IS NOT NULL 
-        THEN m.id ELSE NULL 
-      END) as group2_matches,
-      COUNT(DISTINCT CASE 
-        WHEN m.match_group >= 3 AND m.team_a_score IS NOT NULL AND m.team_b_score IS NOT NULL 
-        THEN m.id ELSE NULL 
-      END) as group3plus_matches,
       COALESCE(SUM(
         CASE 
           WHEN m.team_a_score IS NOT NULL AND (m.team_a_player1 = a.id OR m.team_a_player2 = a.id) THEN m.team_a_score
@@ -432,20 +419,14 @@ export async function getLeaderboard() {
     const pointsFor = parseInt(row.points_for) || 0
     const pointsAgainst = parseInt(row.points_against) || 0
     
-    // Calculate weighted wins and matches
+    // Calculate weighted wins (only weight wins, not matches - so Group 1 wins are worth more)
     const group1Wins = parseInt(row.group1_wins) || 0
     const group2Wins = parseInt(row.group2_wins) || 0
     const group3PlusWins = parseInt(row.group3plus_wins) || 0
-    const group1Matches = parseInt(row.group1_matches) || 0
-    const group2Matches = parseInt(row.group2_matches) || 0
-    const group3PlusMatches = parseInt(row.group3plus_matches) || 0
     
     const weightedWins = (group1Wins * getGroupWeight(1)) + 
                          (group2Wins * getGroupWeight(2)) + 
                          (group3PlusWins * getGroupWeight(3))
-    const weightedMatches = (group1Matches * getGroupWeight(1)) + 
-                            (group2Matches * getGroupWeight(2)) + 
-                            (group3PlusMatches * getGroupWeight(3))
     
     return {
       id: row.id,
@@ -459,7 +440,8 @@ export async function getLeaderboard() {
         pointsAgainst,
         pointsDiff: pointsFor - pointsAgainst,
         winPercentage: matchesPlayed > 0 ? (wins / matchesPlayed) * 100 : 0,
-        weightedWinPercentage: weightedMatches > 0 ? (weightedWins / weightedMatches) * 100 : 0,
+        // Weighted Win % = weighted wins / total matches (Group 1 wins count 1.5x, etc.)
+        weightedWinPercentage: matchesPlayed > 0 ? (weightedWins / matchesPlayed) * 100 : 0,
         // Breakdown for transparency
         group1Wins,
         group2Wins,
@@ -488,6 +470,12 @@ export async function syncAthleteRanks() {
     SELECT 
       a.id,
       a.name,
+      -- Total matches played
+      COUNT(DISTINCT CASE 
+        WHEN m.team_a_score IS NOT NULL AND m.team_b_score IS NOT NULL 
+        THEN m.id 
+        ELSE NULL 
+      END) as matches_played,
       -- Wins by group for weighted calculation
       COUNT(DISTINCT CASE 
         WHEN m.match_group = 1 AND (
@@ -507,19 +495,6 @@ export async function syncAthleteRanks() {
           OR (m.winner = 'teamB' AND (m.team_b_player1 = a.id OR m.team_b_player2 = a.id))
         ) THEN m.id ELSE NULL 
       END) as group3plus_wins,
-      -- Matches by group for weighted calculation
-      COUNT(DISTINCT CASE 
-        WHEN m.match_group = 1 AND m.team_a_score IS NOT NULL AND m.team_b_score IS NOT NULL 
-        THEN m.id ELSE NULL 
-      END) as group1_matches,
-      COUNT(DISTINCT CASE 
-        WHEN m.match_group = 2 AND m.team_a_score IS NOT NULL AND m.team_b_score IS NOT NULL 
-        THEN m.id ELSE NULL 
-      END) as group2_matches,
-      COUNT(DISTINCT CASE 
-        WHEN m.match_group >= 3 AND m.team_a_score IS NOT NULL AND m.team_b_score IS NOT NULL 
-        THEN m.id ELSE NULL 
-      END) as group3plus_matches,
       COALESCE(SUM(
         CASE 
           WHEN m.team_a_score IS NOT NULL AND (m.team_a_player1 = a.id OR m.team_a_player2 = a.id) THEN m.team_a_score
@@ -547,27 +522,23 @@ export async function syncAthleteRanks() {
   
   // Calculate stats and sort by Weighted Win % (desc), then +/- (desc)
   const athletes = result.rows.map(row => {
+    const matchesPlayed = parseInt(row.matches_played) || 0
     const group1Wins = parseInt(row.group1_wins) || 0
     const group2Wins = parseInt(row.group2_wins) || 0
     const group3PlusWins = parseInt(row.group3plus_wins) || 0
-    const group1Matches = parseInt(row.group1_matches) || 0
-    const group2Matches = parseInt(row.group2_matches) || 0
-    const group3PlusMatches = parseInt(row.group3plus_matches) || 0
     const pointsFor = parseInt(row.points_for) || 0
     const pointsAgainst = parseInt(row.points_against) || 0
     
-    // Calculate weighted wins and matches using GROUP_WEIGHTS
+    // Calculate weighted wins (only weight wins, not matches)
     const weightedWins = (group1Wins * getGroupWeight(1)) + 
                          (group2Wins * getGroupWeight(2)) + 
                          (group3PlusWins * getGroupWeight(3))
-    const weightedMatches = (group1Matches * getGroupWeight(1)) + 
-                            (group2Matches * getGroupWeight(2)) + 
-                            (group3PlusMatches * getGroupWeight(3))
     
     return {
       id: row.id,
       name: row.name,
-      weightedWinPercentage: weightedMatches > 0 ? (weightedWins / weightedMatches) * 100 : 0,
+      // Weighted Win % = weighted wins / total matches (Group 1 wins count 1.5x, etc.)
+      weightedWinPercentage: matchesPlayed > 0 ? (weightedWins / matchesPlayed) * 100 : 0,
       pointsDiff: pointsFor - pointsAgainst
     }
   })
