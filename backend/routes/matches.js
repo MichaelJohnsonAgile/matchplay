@@ -97,3 +97,36 @@ matchRoutes.put('/:id/status', async (req, res) => {
     res.status(500).json({ error: 'Failed to update match status' })
   }
 })
+
+// PUT /api/matches/:id/players - Update match players (admin)
+matchRoutes.put('/:id/players', async (req, res) => {
+  try {
+    const match = await db.getMatchById(req.params.id)
+    if (!match) {
+      return res.status(404).json({ error: 'Match not found' })
+    }
+    
+    const { teamAPlayer1, teamAPlayer2, teamBPlayer1, teamBPlayer2 } = req.body
+    
+    // Validate that provided player IDs exist
+    const playerIds = [teamAPlayer1, teamAPlayer2, teamBPlayer1, teamBPlayer2].filter(Boolean)
+    for (const playerId of playerIds) {
+      const athlete = await db.getAthleteById(playerId)
+      if (!athlete) {
+        return res.status(400).json({ error: `Athlete not found: ${playerId}` })
+      }
+    }
+    
+    const updatedMatch = await db.updateMatchPlayers(req.params.id, {
+      teamAPlayer1,
+      teamAPlayer2,
+      teamBPlayer1,
+      teamBPlayer2
+    })
+    
+    res.json(updatedMatch)
+  } catch (error) {
+    console.error('Error updating match players:', error)
+    res.status(500).json({ error: 'Failed to update match players' })
+  }
+})

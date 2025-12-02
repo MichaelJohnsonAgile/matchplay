@@ -192,10 +192,74 @@ export default function MatchesTab({ gameDayId, gameDay, isAdminMode = false }) 
   const allMatchesComplete = filteredMatches.length > 0 && 
     filteredMatches.every(m => m.teamA.score !== null && m.teamB.score !== null)
   
-  // Modal state
+  // Score Modal state
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [selectedMatch, setSelectedMatch] = useState(null)
   const [tempScores, setTempScores] = useState({ teamA: '', teamB: '' })
+  
+  // Edit Players Modal state (admin only)
+  const [isEditPlayersModalOpen, setIsEditPlayersModalOpen] = useState(false)
+  const [editPlayersMatch, setEditPlayersMatch] = useState(null)
+  const [editPlayersData, setEditPlayersData] = useState({
+    teamAPlayer1: '',
+    teamAPlayer2: '',
+    teamBPlayer1: '',
+    teamBPlayer2: ''
+  })
+  const [isSavingPlayers, setIsSavingPlayers] = useState(false)
+  
+  // Get sorted list of all athletes for dropdowns
+  const athleteList = Object.values(athletes).sort((a, b) => a.name.localeCompare(b.name))
+  
+  const openEditPlayersModal = (match, e) => {
+    e.stopPropagation() // Prevent opening score modal
+    setEditPlayersMatch(match)
+    setEditPlayersData({
+      teamAPlayer1: match.teamA.players[0],
+      teamAPlayer2: match.teamA.players[1],
+      teamBPlayer1: match.teamB.players[0],
+      teamBPlayer2: match.teamB.players[1]
+    })
+    setIsEditPlayersModalOpen(true)
+  }
+  
+  const closeEditPlayersModal = () => {
+    setIsEditPlayersModalOpen(false)
+    setEditPlayersMatch(null)
+    setEditPlayersData({
+      teamAPlayer1: '',
+      teamAPlayer2: '',
+      teamBPlayer1: '',
+      teamBPlayer2: ''
+    })
+  }
+  
+  const saveEditedPlayers = async () => {
+    if (!editPlayersMatch) return
+    
+    setIsSavingPlayers(true)
+    try {
+      await matchAPI.updatePlayers(editPlayersMatch.id, editPlayersData)
+      await loadMatches()
+      closeEditPlayersModal()
+      setAlertModal({
+        isOpen: true,
+        title: 'Success',
+        message: 'Match players updated successfully',
+        type: 'success'
+      })
+    } catch (err) {
+      console.error('Failed to update players:', err)
+      setAlertModal({
+        isOpen: true,
+        title: 'Error',
+        message: 'Failed to update players. Please try again.',
+        type: 'error'
+      })
+    } finally {
+      setIsSavingPlayers(false)
+    }
+  }
   
   const openScoreModal = (match) => {
     setSelectedMatch(match)
@@ -503,11 +567,22 @@ export default function MatchesTab({ gameDayId, gameDay, isAdminMode = false }) 
                   >
                     <div className="text-xs text-gray-600 mb-3 flex justify-between items-center">
                       <span>Match {index + 1} <span className="text-gray-400">({match.id.substring(match.id.length - 8)})</span></span>
-                      {match.bye && (
-                        <span className="text-orange-600 font-medium">
-                          Bye: {getAthleteName(match.bye)}
-                        </span>
-                      )}
+                      <div className="flex items-center gap-2">
+                        {match.bye && (
+                          <span className="text-orange-600 font-medium">
+                            Bye: {getAthleteName(match.bye)}
+                          </span>
+                        )}
+                        {isAdminMode && (
+                          <button
+                            onClick={(e) => openEditPlayersModal(match, e)}
+                            className="text-blue-600 hover:text-blue-800 hover:bg-blue-50 px-2 py-1 rounded text-xs font-medium"
+                            title="Edit players"
+                          >
+                            Edit Players
+                          </button>
+                        )}
+                      </div>
                     </div>
                     
                     <div 
@@ -649,6 +724,113 @@ export default function MatchesTab({ gameDayId, gameDay, isAdminMode = false }) 
         message={alertModal.message}
         type={alertModal.type}
       />
+      
+      {/* Edit Players Modal (Admin Only) */}
+      <Modal isOpen={isEditPlayersModalOpen} onClose={closeEditPlayersModal}>
+        <h3 className="text-xl font-semibold mb-4">Edit Match Players</h3>
+        
+        {editPlayersMatch && (
+          <div className="space-y-4">
+            <div className="text-sm text-gray-600 mb-4">
+              Match ID: {editPlayersMatch.id.substring(editPlayersMatch.id.length - 8)}
+            </div>
+            
+            {/* Team A Players */}
+            <div className="border border-gray-200 rounded p-3">
+              <label className="block text-sm font-semibold mb-3 text-gray-700">Team A</label>
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Player 1</label>
+                  <select
+                    value={editPlayersData.teamAPlayer1}
+                    onChange={(e) => setEditPlayersData(prev => ({ ...prev, teamAPlayer1: e.target.value }))}
+                    className="w-full border border-gray-200 rounded px-3 py-2 text-sm"
+                  >
+                    <option value="">Select player...</option>
+                    {athleteList.map(athlete => (
+                      <option key={athlete.id} value={athlete.id}>
+                        {athlete.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Player 2</label>
+                  <select
+                    value={editPlayersData.teamAPlayer2}
+                    onChange={(e) => setEditPlayersData(prev => ({ ...prev, teamAPlayer2: e.target.value }))}
+                    className="w-full border border-gray-200 rounded px-3 py-2 text-sm"
+                  >
+                    <option value="">Select player...</option>
+                    {athleteList.map(athlete => (
+                      <option key={athlete.id} value={athlete.id}>
+                        {athlete.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+            
+            <div className="text-center text-sm font-bold text-gray-400">VS</div>
+            
+            {/* Team B Players */}
+            <div className="border border-gray-200 rounded p-3">
+              <label className="block text-sm font-semibold mb-3 text-gray-700">Team B</label>
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Player 1</label>
+                  <select
+                    value={editPlayersData.teamBPlayer1}
+                    onChange={(e) => setEditPlayersData(prev => ({ ...prev, teamBPlayer1: e.target.value }))}
+                    className="w-full border border-gray-200 rounded px-3 py-2 text-sm"
+                  >
+                    <option value="">Select player...</option>
+                    {athleteList.map(athlete => (
+                      <option key={athlete.id} value={athlete.id}>
+                        {athlete.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Player 2</label>
+                  <select
+                    value={editPlayersData.teamBPlayer2}
+                    onChange={(e) => setEditPlayersData(prev => ({ ...prev, teamBPlayer2: e.target.value }))}
+                    className="w-full border border-gray-200 rounded px-3 py-2 text-sm"
+                  >
+                    <option value="">Select player...</option>
+                    {athleteList.map(athlete => (
+                      <option key={athlete.id} value={athlete.id}>
+                        {athlete.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+            
+            {/* Action Buttons */}
+            <div className="flex gap-3 pt-4">
+              <button 
+                onClick={closeEditPlayersModal}
+                className="flex-1 border border-gray-200 px-4 py-2 text-sm font-medium"
+                disabled={isSavingPlayers}
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={saveEditedPlayers}
+                disabled={isSavingPlayers}
+                className="flex-1 bg-blue-600 text-white px-4 py-2 text-sm font-medium hover:bg-blue-700 disabled:bg-gray-400"
+              >
+                {isSavingPlayers ? 'Saving...' : 'Save Changes'}
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   )
 }

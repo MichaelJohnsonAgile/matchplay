@@ -214,6 +214,14 @@ export const matchAPI = {
       body: JSON.stringify({ status }),
     })
   },
+  
+  // Update match players (admin)
+  async updatePlayers(id, playerData) {
+    return apiRequest(`/matches/${id}/players`, {
+      method: 'PUT',
+      body: JSON.stringify(playerData),
+    })
+  },
 }
 
 // Leaderboard APIs

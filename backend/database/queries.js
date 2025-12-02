@@ -274,6 +274,25 @@ export async function updateMatch(id, matchData) {
   return formatMatchFromDb(result.rows[0])
 }
 
+// Update specific players in a match
+export async function updateMatchPlayers(id, playerUpdates) {
+  const { teamAPlayer1, teamAPlayer2, teamBPlayer1, teamBPlayer2 } = playerUpdates
+  
+  const result = await query(
+    `UPDATE matches 
+     SET team_a_player1 = COALESCE($2, team_a_player1),
+         team_a_player2 = COALESCE($3, team_a_player2),
+         team_b_player1 = COALESCE($4, team_b_player1),
+         team_b_player2 = COALESCE($5, team_b_player2)
+     WHERE id = $1
+     RETURNING *`,
+    [id, teamAPlayer1, teamAPlayer2, teamBPlayer1, teamBPlayer2]
+  )
+  
+  if (result.rows.length === 0) return null
+  return formatMatchFromDb(result.rows[0])
+}
+
 export async function deleteMatchesByGameDay(gameDayId) {
   const result = await query('DELETE FROM matches WHERE gameday_id = $1', [gameDayId])
   return result.rowCount
