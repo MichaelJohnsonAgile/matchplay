@@ -987,8 +987,23 @@ async function generateTeamsMatches(gameDayId, gameDay, res) {
     // Track match-ups to avoid exact duplicates
     const matchupHistory = new Set() // "pairAKey-pairBKey"
     
+    // Track team vs team matchup counts to ensure variety (e.g., Blue vs Red, Blue vs Green, etc.)
+    const teamMatchupCount = new Map() // "teamNumber1-teamNumber2" -> count
+    
+    // Track versus pairings - who has faced whom (to guarantee everyone faces everyone)
+    // Map: playerId -> Set of opponent playerIds they've faced
+    const versusTracker = new Map()
+    allPlayers.forEach(p => versusTracker.set(p.id, new Set()))
+    
     const scheduledMatches = []
     const numberOfTeams = teams.length
+    
+    // Calculate total versus pairings needed (for logging)
+    // Each player needs to face all players from other teams
+    const playersPerTeam = teamData[0]?.members.length || 0
+    const versusPerPlayer = playersPerTeam * (numberOfTeams - 1) // e.g., 4 players × 3 other teams = 12
+    const totalVersusPairings = (totalPlayers * versusPerPlayer) / 2 // Divide by 2 since A vs B = B vs A
+    console.log(`Target: ${versusPerPlayer} opponents per player, ${totalVersusPairings} total unique versus pairings`)
     
     for (let round = 1; round <= targetRounds; round++) {
       const roundMatches = []
@@ -1003,7 +1018,9 @@ async function generateTeamsMatches(gameDayId, gameDay, res) {
           playerGameCount,
           pairUsageCount,
           matchupHistory,
-          numberOfTeams
+          numberOfTeams,
+          teamMatchupCount,
+          versusTracker
         )
         
         if (match) {
@@ -1049,6 +1066,20 @@ async function generateTeamsMatches(gameDayId, gameDay, res) {
           // Record matchup to avoid duplicates
           const matchupKey = [pairAKey, pairBKey].sort().join('|')
           matchupHistory.add(matchupKey)
+          
+          // Update team vs team matchup count
+          const teamMatchupKey = [match.pairA.teamNumber, match.pairB.teamNumber].sort().join('-')
+          teamMatchupCount.set(teamMatchupKey, (teamMatchupCount.get(teamMatchupKey) || 0) + 1)
+          
+          // Update versus tracker - record who faced whom
+          const teamAPlayers = [match.pairA.player1.id, match.pairA.player2.id]
+          const teamBPlayers = [match.pairB.player1.id, match.pairB.player2.id]
+          for (const pA of teamAPlayers) {
+            for (const pB of teamBPlayers) {
+              versusTracker.get(pA).add(pB)
+              versusTracker.get(pB).add(pA)
+            }
+          }
         }
       }
       
@@ -1062,6 +1093,39 @@ async function generateTeamsMatches(gameDayId, gameDay, res) {
     const maxGames = Math.max(...gameCounts)
     const avgGames = (gameCounts.reduce((a, b) => a + b, 0) / gameCounts.length).toFixed(1)
     console.log(`Games per player: min=${minGames}, max=${maxGames}, avg=${avgGames}`)
+    
+    // Log team matchup distribution (for 4-team mode)
+    if (numberOfTeams > 2) {
+      console.log('Team matchup distribution:')
+      const teamNames = { 1: 'Blue', 2: 'Red', 3: 'Green', 4: 'Yellow' }
+      for (const [key, count] of teamMatchupCount.entries()) {
+        const [t1, t2] = key.split('-').map(Number)
+        console.log(`  ${teamNames[t1] || t1} vs ${teamNames[t2] || t2}: ${count} matches`)
+      }
+    }
+    
+    // Log versus coverage stats
+    let totalCoveredPairings = 0
+    let minOpponentsFaced = Infinity
+    let maxOpponentsFaced = 0
+    let playersWithFullCoverage = 0
+    
+    for (const [playerId, opponents] of versusTracker.entries()) {
+      const opponentCount = opponents.size
+      totalCoveredPairings += opponentCount
+      minOpponentsFaced = Math.min(minOpponentsFaced, opponentCount)
+      maxOpponentsFaced = Math.max(maxOpponentsFaced, opponentCount)
+      if (opponentCount >= versusPerPlayer) {
+        playersWithFullCoverage++
+      }
+    }
+    
+    totalCoveredPairings = totalCoveredPairings / 2 // Each pairing counted twice
+    const coveragePercent = ((totalCoveredPairings / totalVersusPairings) * 100).toFixed(1)
+    
+    console.log(`Versus coverage: ${totalCoveredPairings}/${totalVersusPairings} pairings (${coveragePercent}%)`)
+    console.log(`Opponents faced per player: min=${minOpponentsFaced}, max=${maxOpponentsFaced}, target=${versusPerPlayer}`)
+    console.log(`Players with full coverage: ${playersWithFullCoverage}/${totalPlayers}`)
     
     // Save matches to database
     for (const match of scheduledMatches) {
@@ -1086,8 +1150,8 @@ async function generateTeamsMatches(gameDayId, gameDay, res) {
   }
 }
 
-// Find the best match to add to a round - prioritises fair play distribution
-function findBestTeamMatch(teamData, teamPairs, playersInRound, playerGameCount, pairUsageCount, matchupHistory, numberOfTeams) {
+// Find the best match to add to a round - prioritises versus coverage, then fair play distribution
+function findBestTeamMatch(teamData, teamPairs, playersInRound, playerGameCount, pairUsageCount, matchupHistory, numberOfTeams, teamMatchupCount, versusTracker) {
   let bestMatch = null
   let bestScore = Infinity // Lower is better
   
@@ -1105,6 +1169,10 @@ function findBestTeamMatch(teamData, teamPairs, playersInRound, playerGameCount,
   for (const [teamA, teamB] of teamCombinations) {
     const pairsA = teamPairs.get(teamA.id)
     const pairsB = teamPairs.get(teamB.id)
+    
+    // Calculate team matchup usage for this combination
+    const teamMatchupKey = [teamA.team_number, teamB.team_number].sort().join('-')
+    const teamMatchupUsage = teamMatchupCount.get(teamMatchupKey) || 0
     
     for (const pairA of pairsA) {
       // Skip if any player already in this round
@@ -1126,6 +1194,21 @@ function findBestTeamMatch(teamData, teamPairs, playersInRound, playerGameCount,
         // Track duplicate matchups (allowed, with small penalty for variety)
         const duplicateCount = matchupHistory.has(matchupKey) ? 1 : 0
         
+        // Calculate how many NEW versus pairings this match would cover
+        const teamAPlayers = [pairA.player1.id, pairA.player2.id]
+        const teamBPlayers = [pairB.player1.id, pairB.player2.id]
+        let newVersusPairings = 0
+        for (const pAId of teamAPlayers) {
+          for (const pBId of teamBPlayers) {
+            if (!versusTracker.get(pAId).has(pBId)) {
+              newVersusPairings++
+            }
+          }
+        }
+        // Max possible new pairings per match is 4 (2x2)
+        // Invert so that MORE new pairings = LOWER score (better)
+        const versusCoverageBonus = (4 - newVersusPairings) * 100 // Heavy weight - prioritise coverage!
+        
         // Calculate fairness score - prioritise players who have played fewer games
         const playersInMatch = [
           pairA.player1.id, pairA.player2.id,
@@ -1138,10 +1221,14 @@ function findBestTeamMatch(teamData, teamPairs, playersInRound, playerGameCount,
         // Also consider pair usage variety (spread partnerships around)
         const pairUsage = (pairUsageCount.get(pairAKey) || 0) + (pairUsageCount.get(pairBKey) || 0)
         
-        // Score: PRIMARY focus is fair play (players with fewer games first)
-        // Secondary: vary partnerships, small penalty for exact duplicate matchups
-        // Lower score = better match
-        let score = totalGamesPlayed * 10 + pairUsage + (duplicateCount * 20)
+        // Score components (lower = better):
+        // 1. HIGHEST PRIORITY: Versus coverage - matches that create NEW opponent pairings
+        // 2. Team matchup variety (for 4 teams) - spread across all team combinations
+        // 3. Fair play (players with fewer games first)
+        // 4. Partnership variety
+        // 5. Duplicate matchup penalty
+        const teamVarietyPenalty = numberOfTeams > 2 ? teamMatchupUsage * 30 : 0
+        let score = versusCoverageBonus + teamVarietyPenalty + (totalGamesPlayed * 10) + pairUsage + (duplicateCount * 20)
         
         if (score < bestScore) {
           bestScore = score
