@@ -19,6 +19,8 @@ export default function GameDay() {
   const [isDeleting, setIsDeleting] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [showCompleteModal, setShowCompleteModal] = useState(false)
+  const [isCompleting, setIsCompleting] = useState(false)
   const [editFormData, setEditFormData] = useState({
     date: '',
     venue: '',
@@ -104,6 +106,20 @@ export default function GameDay() {
       ...prev,
       [name]: value
     }))
+  }
+
+  const handleCompleteGameDay = async () => {
+    try {
+      setIsCompleting(true)
+      await gameDayAPI.update(id, { status: 'completed' })
+      await loadGameDay() // Reload to show updated status
+      setShowCompleteModal(false)
+    } catch (err) {
+      console.error('Failed to complete game day:', err)
+      setError('Failed to complete game day. Please try again.')
+      setIsCompleting(false)
+      setShowCompleteModal(false)
+    }
   }
 
   if (isLoading) {
@@ -197,12 +213,20 @@ export default function GameDay() {
                 Edit
               </button>
               {gameDay.status !== 'completed' && (
-                <button
-                  onClick={() => setShowDeleteModal(true)}
-                  className="border border-red-500 text-red-600 px-3 py-1.5 text-sm font-medium hover:bg-red-50 transition-colors"
-                >
-                  Delete
-                </button>
+                <>
+                  <button
+                    onClick={() => setShowCompleteModal(true)}
+                    className="border border-[#377850] text-[#377850] px-3 py-1.5 text-sm font-medium hover:bg-green-50 transition-colors"
+                  >
+                    Complete Game Day
+                  </button>
+                  <button
+                    onClick={() => setShowDeleteModal(true)}
+                    className="border border-red-500 text-red-600 px-3 py-1.5 text-sm font-medium hover:bg-red-50 transition-colors"
+                  >
+                    Delete
+                  </button>
+                </>
               )}
             </>
           )}
@@ -370,6 +394,50 @@ export default function GameDay() {
               className="flex-1 bg-red-600 text-white px-4 py-2 text-sm font-medium hover:bg-red-700 disabled:bg-gray-400"
             >
               {isDeleting ? 'Deleting...' : 'Yes, Delete Everything'}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={showCompleteModal}
+        onClose={() => setShowCompleteModal(false)}
+        title="Complete Game Day"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600">
+            Are you sure you want to mark this game day as completed?
+          </p>
+          <div className="bg-gray-50 border border-gray-200 p-3 text-sm">
+            <div className="font-medium">{formatGameDayDate(gameDay.date)}</div>
+            <div className="text-gray-600">{gameDay.venue}</div>
+            {hasMatches && (
+              <div className="text-gray-600 mt-2">
+                {gameDay.matchCount} matches recorded
+              </div>
+            )}
+          </div>
+          <div className="bg-amber-50 border border-amber-200 p-3 rounded">
+            <p className="text-sm text-amber-800">
+              Once completed, you will no longer be able to delete this game day or make major changes.
+            </p>
+          </div>
+          <div className="flex gap-2 pt-2">
+            <button
+              type="button"
+              onClick={() => setShowCompleteModal(false)}
+              disabled={isCompleting}
+              className="flex-1 border border-gray-200 px-4 py-2 text-sm font-medium hover:bg-gray-50 disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleCompleteGameDay}
+              disabled={isCompleting}
+              className="flex-1 bg-[#377850] text-white px-4 py-2 text-sm font-medium hover:bg-[#2d5f40] disabled:bg-gray-400"
+            >
+              {isCompleting ? 'Completing...' : 'Yes, Complete Game Day'}
             </button>
           </div>
         </div>

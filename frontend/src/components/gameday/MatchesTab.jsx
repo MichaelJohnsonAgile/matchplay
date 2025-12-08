@@ -2,13 +2,23 @@ import { useState, useEffect } from 'react'
 import { SkeletonText } from '../Skeleton'
 import Modal from '../Modal'
 import { AlertModal } from '../Alert'
-import { matchAPI, athleteAPI, gameDayAPI } from '../../services/api'
+import { matchAPI, athleteAPI, gameDayAPI, teamsAPI } from '../../services/api'
+
+// Team colour definitions for visual indicators
+const TEAM_COLOR_CLASSES = {
+  blue: { bg: 'bg-blue-500', text: 'text-blue-600', border: 'border-blue-400' },
+  red: { bg: 'bg-red-500', text: 'text-red-600', border: 'border-red-400' },
+  green: { bg: 'bg-green-500', text: 'text-green-600', border: 'border-green-400' },
+  yellow: { bg: 'bg-yellow-500', text: 'text-yellow-600', border: 'border-yellow-400' }
+}
 
 export default function MatchesTab({ gameDayId, gameDay, isAdminMode = false }) {
   const [selectedRound, setSelectedRound] = useState('1')
   const [selectedGroup, setSelectedGroup] = useState('1')
   const [matches, setMatches] = useState([])
   const [athletes, setAthletes] = useState({}) // Map of athleteId -> athlete object
+  const [athleteTeamMap, setAthleteTeamMap] = useState({}) // Map of athleteId -> { teamName, teamColor }
+  const [teams, setTeams] = useState([]) // Team data for legend
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState(null)
   const [isGeneratingRound, setIsGeneratingRound] = useState(false)
@@ -32,13 +42,27 @@ export default function MatchesTab({ gameDayId, gameDay, isAdminMode = false }) 
     try {
       setIsLoading(true)
       setError(null)
-      const [matchesData, athletesData] = await Promise.all([
+      
+      // Check if this is teams mode to determine what to load
+      const isTeams = gameDay?.settings?.format === 'teams'
+      
+      const promises = [
         matchAPI.getForGameDay(gameDayId),
         athleteAPI.getForGameDay(gameDayId)
-      ])
+      ]
+      
+      // Also load teams data if in teams mode
+      if (isTeams) {
+        promises.push(teamsAPI.getForGameDay(gameDayId))
+      }
+      
+      const results = await Promise.all(promises)
+      const [matchesData, athletesData] = results
+      const teamsData = isTeams ? results[2] : []
       
       console.log('Loaded matches:', matchesData)
       console.log('Loaded athletes:', athletesData)
+      if (isTeams) console.log('Loaded teams:', teamsData)
       
       setMatches(matchesData)
       
@@ -48,6 +72,21 @@ export default function MatchesTab({ gameDayId, gameDay, isAdminMode = false }) 
         athleteMap[athlete.id] = athlete
       })
       setAthletes(athleteMap)
+      
+      // Create athlete to team mapping for teams mode
+      if (isTeams && teamsData.length > 0) {
+        setTeams(teamsData)
+        const teamMap = {}
+        teamsData.forEach(team => {
+          team.members.forEach(member => {
+            teamMap[member.id] = {
+              teamName: team.teamName,
+              teamColor: team.teamColor
+            }
+          })
+        })
+        setAthleteTeamMap(teamMap)
+      }
     } catch (err) {
       console.error('Failed to load data:', err)
       setError(err.message || 'Failed to load data')
@@ -68,6 +107,30 @@ export default function MatchesTab({ gameDayId, gameDay, isAdminMode = false }) 
   // Helper to get athlete name
   const getAthleteName = (athleteId) => {
     return athletes[athleteId]?.name || 'Unknown'
+  }
+  
+  // Helper to get team colour info for an athlete
+  const getAthleteTeamInfo = (athleteId) => {
+    return athleteTeamMap[athleteId] || null
+  }
+  
+  // Component to render player name with team colour indicator
+  const PlayerName = ({ athleteId }) => {
+    const name = getAthleteName(athleteId)
+    const teamInfo = getAthleteTeamInfo(athleteId)
+    const colorClasses = teamInfo ? TEAM_COLOR_CLASSES[teamInfo.teamColor] : null
+    
+    return (
+      <span className="inline-flex items-center gap-1.5">
+        {colorClasses && (
+          <span 
+            className={`w-3 h-3 rounded-full ${colorClasses.bg} flex-shrink-0`}
+            title={teamInfo.teamName}
+          />
+        )}
+        <span>{name}</span>
+      </span>
+    )
   }
   
   const rounds = []
@@ -405,6 +468,22 @@ export default function MatchesTab({ gameDayId, gameDay, isAdminMode = false }) 
         </div>
       </div>
       
+      {/* Team Colour Legend - only for teams mode */}
+      {isTeamsMode && teams.length > 0 && (
+        <div className="flex items-center gap-4 flex-wrap bg-gray-50 p-3 rounded border border-gray-200">
+          <span className="text-sm text-gray-600 font-medium">Teams:</span>
+          {teams.map(team => {
+            const colorClasses = TEAM_COLOR_CLASSES[team.teamColor]
+            return (
+              <div key={team.teamId} className="flex items-center gap-1.5">
+                <span className={`w-3 h-3 rounded-full ${colorClasses?.bg || 'bg-gray-400'}`} />
+                <span className="text-sm">{team.teamName}</span>
+              </div>
+            )
+          })}
+        </div>
+      )}
+      
       {/* Generate Next Round Button - only for group mode */}
       {canGenerateNextRound && !isTeamsMode && (
         <div className="bg-green-50 border border-green-500 p-4 rounded">
@@ -569,8 +648,8 @@ export default function MatchesTab({ gameDayId, gameDay, isAdminMode = false }) 
                       <span>Match {index + 1} <span className="text-gray-400">({match.id.substring(match.id.length - 8)})</span></span>
                       <div className="flex items-center gap-2">
                         {match.bye && (
-                          <span className="text-orange-600 font-medium">
-                            Bye: {getAthleteName(match.bye)}
+                          <span className="text-orange-600 font-medium inline-flex items-center gap-1">
+                            Bye: <PlayerName athleteId={match.bye} />
                           </span>
                         )}
                         {isAdminMode && (
@@ -594,13 +673,13 @@ export default function MatchesTab({ gameDayId, gameDay, isAdminMode = false }) 
                         <div className={`flex justify-between items-center gap-3 p-2 rounded transition-colors ${
                           teamAWins ? 'bg-green-100' : teamBWins ? 'bg-red-100' : ''
                         }`}>
-                          <div className="flex gap-2 items-center flex-1">
+                          <div className="flex gap-2 items-center flex-1 flex-wrap">
                             <span className="text-sm font-medium">
-                              {getAthleteName(match.teamA.players[0])}
+                              <PlayerName athleteId={match.teamA.players[0]} />
                             </span>
                             <span className="text-gray-400">&</span>
                             <span className="text-sm font-medium">
-                              {getAthleteName(match.teamA.players[1])}
+                              <PlayerName athleteId={match.teamA.players[1]} />
                             </span>
                           </div>
                           <div className="h-8 w-16 rounded border border-gray-200 bg-gray-100 flex items-center justify-center font-semibold flex-shrink-0">
@@ -619,13 +698,13 @@ export default function MatchesTab({ gameDayId, gameDay, isAdminMode = false }) 
                         <div className={`flex justify-between items-center gap-3 p-2 rounded transition-colors ${
                           teamBWins ? 'bg-green-100' : teamAWins ? 'bg-red-100' : ''
                         }`}>
-                          <div className="flex gap-2 items-center flex-1">
+                          <div className="flex gap-2 items-center flex-1 flex-wrap">
                             <span className="text-sm font-medium">
-                              {getAthleteName(match.teamB.players[0])}
+                              <PlayerName athleteId={match.teamB.players[0]} />
                             </span>
                             <span className="text-gray-400">&</span>
                             <span className="text-sm font-medium">
-                              {getAthleteName(match.teamB.players[1])}
+                              <PlayerName athleteId={match.teamB.players[1]} />
                             </span>
                           </div>
                           <div className="h-8 w-16 rounded border border-gray-200 bg-gray-100 flex items-center justify-center font-semibold flex-shrink-0">

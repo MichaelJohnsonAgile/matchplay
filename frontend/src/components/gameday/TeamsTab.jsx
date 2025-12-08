@@ -44,6 +44,9 @@ export function TeamsTab({ gameDayId, settings, onUpdate, isAdminMode = false })
   const [generating, setGenerating] = useState(false)
   const [generatingDraw, setGeneratingDraw] = useState(false)
   const [hasMatches, setHasMatches] = useState(false)
+  const [swapMode, setSwapMode] = useState(false)
+  const [selectedPlayer, setSelectedPlayer] = useState(null) // { playerId, playerName, teamId, teamName }
+  const [swapping, setSwapping] = useState(false)
   
   useEffect(() => {
     loadData()
@@ -108,6 +111,76 @@ export function TeamsTab({ gameDayId, settings, onUpdate, isAdminMode = false })
     }
   }
   
+  function handleToggleSwapMode() {
+    setSwapMode(!swapMode)
+    setSelectedPlayer(null)
+  }
+  
+  function handlePlayerClick(player, team) {
+    if (!swapMode) return
+    
+    // If no player is selected, select this one
+    if (!selectedPlayer) {
+      setSelectedPlayer({
+        playerId: player.id,
+        playerName: player.name,
+        teamId: team.teamId,
+        teamName: team.teamName
+      })
+      return
+    }
+    
+    // If clicking the same player, deselect
+    if (selectedPlayer.playerId === player.id) {
+      setSelectedPlayer(null)
+      return
+    }
+    
+    // If clicking a player from the same team, select this player instead
+    if (selectedPlayer.teamId === team.teamId) {
+      setSelectedPlayer({
+        playerId: player.id,
+        playerName: player.name,
+        teamId: team.teamId,
+        teamName: team.teamName
+      })
+      return
+    }
+    
+    // Swap players between different teams
+    handleSwap(player, team)
+  }
+  
+  async function handleSwap(player2, team2) {
+    setSwapping(true)
+    setError(null)
+    
+    try {
+      const player1 = selectedPlayer
+      
+      // Remove both players from their current teams
+      await teamsAPI.removeMember(player1.teamId, player1.playerId)
+      await teamsAPI.removeMember(team2.teamId, player2.id)
+      
+      // Add each player to the other team
+      await teamsAPI.addMember(team2.teamId, player1.playerId)
+      await teamsAPI.addMember(player1.teamId, player2.id)
+      
+      // Reload teams to show updated assignments
+      await loadData()
+      
+      // Reset selection but stay in swap mode
+      setSelectedPlayer(null)
+    } catch (err) {
+      console.error('Error swapping players:', err)
+      setError('Failed to swap players: ' + err.message)
+      // Reload to ensure UI is consistent
+      await loadData()
+    } finally {
+      setSwapping(false)
+    }
+  }
+  
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -139,19 +212,30 @@ export function TeamsTab({ gameDayId, settings, onUpdate, isAdminMode = false })
             </button>
           )}
           
-          {/* Admin-only: Regenerate Teams and Generate Draw buttons */}
+          {/* Admin-only: Regenerate Teams, Swap Players, and Generate Draw buttons */}
           {isAdminMode && teams.length > 0 && !hasMatches && (
             <>
               <button
                 onClick={handleGenerateTeams}
-                disabled={generating}
-                className="border border-gray-200 px-4 py-2 text-sm font-medium hover:bg-gray-50 disabled:bg-gray-100"
+                disabled={generating || swapMode}
+                className="border border-gray-200 px-4 py-2 text-sm font-medium hover:bg-gray-50 disabled:bg-gray-100 disabled:text-gray-400"
               >
                 {generating ? 'Regenerating...' : 'Regenerate Teams'}
               </button>
               <button
+                onClick={handleToggleSwapMode}
+                disabled={swapping}
+                className={`px-4 py-2 text-sm font-medium transition-colors ${
+                  swapMode 
+                    ? 'bg-amber-500 text-white hover:bg-amber-600' 
+                    : 'border border-amber-500 text-amber-600 hover:bg-amber-50'
+                }`}
+              >
+                {swapMode ? 'Exit Swap Mode' : 'Swap Players'}
+              </button>
+              <button
                 onClick={handleGenerateDraw}
-                disabled={generatingDraw}
+                disabled={generatingDraw || swapMode}
                 className="bg-[#377850] text-white px-4 py-2 text-sm font-medium disabled:bg-gray-400"
               >
                 {generatingDraw ? 'Generating...' : 'Generate Draw'}
@@ -177,6 +261,44 @@ export function TeamsTab({ gameDayId, settings, onUpdate, isAdminMode = false })
       {error && (
         <div className="border border-red-500 bg-red-50 p-4 text-red-800 rounded">
           {error}
+        </div>
+      )}
+      
+      {/* Swap Mode Instructions */}
+      {swapMode && (
+        <div className="border-2 border-amber-400 bg-amber-50 p-4 rounded-lg">
+          <div className="flex items-center gap-3">
+            <div className="flex-shrink-0">
+              <svg className="w-6 h-6 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+              </svg>
+            </div>
+            <div className="flex-grow">
+              <p className="font-semibold text-amber-800">Swap Mode Active</p>
+              <p className="text-sm text-amber-700">
+                {selectedPlayer 
+                  ? `${selectedPlayer.playerName} selected. Click a player from another team to swap them.`
+                  : 'Click on a player to select them, then click on a player from a different team to swap.'}
+              </p>
+            </div>
+            {selectedPlayer && (
+              <button
+                onClick={() => setSelectedPlayer(null)}
+                className="text-amber-600 hover:text-amber-800 text-sm underline"
+              >
+                Cancel selection
+              </button>
+            )}
+          </div>
+          {swapping && (
+            <div className="mt-2 text-sm text-amber-700 flex items-center gap-2">
+              <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              Swapping players...
+            </div>
+          )}
         </div>
       )}
       
@@ -211,20 +333,58 @@ export function TeamsTab({ gameDayId, settings, onUpdate, isAdminMode = false })
                 
                 {/* Team Members */}
                 <div className="p-4 space-y-2 bg-white">
-                  {team.members.map((member, idx) => (
-                    <div 
-                      key={member.id} 
-                      className="flex justify-between items-center p-3 bg-gray-50 rounded border border-gray-200"
-                    >
-                      <div>
-                        <div className="font-medium">{member.name}</div>
-                        <div className="text-sm text-gray-500">Rank {member.rank}</div>
+                  {team.members.map((member, idx) => {
+                    const isSelected = selectedPlayer?.playerId === member.id
+                    const isSwappable = swapMode && selectedPlayer && selectedPlayer.teamId !== team.teamId
+                    const isClickable = swapMode && isAdminMode
+                    
+                    return (
+                      <div 
+                        key={member.id} 
+                        onClick={() => isClickable && handlePlayerClick(member, team)}
+                        className={`flex justify-between items-center p-3 rounded border-2 transition-all ${
+                          isSelected 
+                            ? 'bg-amber-100 border-amber-400 ring-2 ring-amber-300' 
+                            : isSwappable
+                              ? 'bg-green-50 border-green-300 hover:bg-green-100 hover:border-green-400 cursor-pointer'
+                              : isClickable
+                                ? 'bg-gray-50 border-gray-200 hover:bg-gray-100 hover:border-gray-300 cursor-pointer'
+                                : 'bg-gray-50 border-gray-200'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          {isSelected && (
+                            <span className="flex-shrink-0 w-6 h-6 rounded-full bg-amber-500 flex items-center justify-center">
+                              <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                              </svg>
+                            </span>
+                          )}
+                          {isSwappable && !isSelected && (
+                            <span className="flex-shrink-0 w-6 h-6 rounded-full bg-green-500 flex items-center justify-center">
+                              <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                              </svg>
+                            </span>
+                          )}
+                          <div>
+                            <div className="font-medium">{member.name}</div>
+                            <div className="text-sm text-gray-500">Rank {member.rank}</div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {isSwappable && (
+                            <span className="text-xs text-green-600 font-medium">
+                              Click to swap
+                            </span>
+                          )}
+                          <span className={`text-xs px-2 py-1 rounded border ${colorScheme.badge}`}>
+                            #{idx + 1}
+                          </span>
+                        </div>
                       </div>
-                      <span className={`text-xs px-2 py-1 rounded border ${colorScheme.badge}`}>
-                        #{idx + 1}
-                      </span>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
                 
                 {/* Team Stats */}
