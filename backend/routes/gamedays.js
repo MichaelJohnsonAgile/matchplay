@@ -907,7 +907,7 @@ function scheduleMatchesIntoRounds(matches) {
 }
 
 // Helper function to generate matches for teams mode
-// New algorithm: generates targeted number of rounds with fair play distribution
+// Fixed rotation: 4 games per round with predictable team matchups
 async function generateTeamsMatches(gameDayId, gameDay, res) {
   try {
     console.log('Generating matches for TEAMS mode')
@@ -933,6 +933,9 @@ async function generateTeamsMatches(gameDayId, gameDay, res) {
       }
     }))
     
+    // Sort teams by team_number to ensure consistent ordering
+    teamData.sort((a, b) => a.team.team_number - b.team.team_number)
+    
     // Get all players with team info
     const allPlayers = []
     teamData.forEach(({ team, members }) => {
@@ -946,21 +949,7 @@ async function generateTeamsMatches(gameDayId, gameDay, res) {
     })
     
     const totalPlayers = allPlayers.length
-    const maxMatchesPerRound = Math.floor(totalPlayers / 4)
-    
-    // Target: everyone plays 8 games
-    // Based on ~105 minutes game time, ~12 minutes per game = fits 8-9 rounds
-    // With 4 players per match, we need (totalPlayers * targetGames) / 4 total matches
-    const targetGamesPerPlayer = 8
-    const targetTotalMatches = Math.ceil(totalPlayers * targetGamesPerPlayer / 4)
-    const targetRounds = Math.ceil(targetTotalMatches / maxMatchesPerRound)
-    
-    console.log(`Planning ${targetRounds} rounds with ${maxMatchesPerRound} matches each`)
-    console.log(`Target: ~${targetTotalMatches} total matches, each player plays ~${targetGamesPerPlayer} games`)
-    
-    // Track games played per player
-    const playerGameCount = new Map()
-    allPlayers.forEach(p => playerGameCount.set(p.id, 0))
+    const numberOfTeams = teams.length
     
     // Generate all possible pairs per team
     const teamPairs = new Map() // teamId -> array of pairs
@@ -981,103 +970,152 @@ async function generateTeamsMatches(gameDayId, gameDay, res) {
     
     console.log('Pairs per team:', teamData.map(td => `Team ${td.team.team_number}: ${teamPairs.get(td.team.id).length} pairs`))
     
-    // Track pair usage to vary combinations
+    // Track games played per player
+    const playerGameCount = new Map()
+    allPlayers.forEach(p => playerGameCount.set(p.id, 0))
+    
+    // Track pair usage to vary partnerships
     const pairUsageCount = new Map() // "player1Id-player2Id" -> count
     
     // Track match-ups to avoid exact duplicates
     const matchupHistory = new Set() // "pairAKey-pairBKey"
     
-    // Track team vs team matchup counts to ensure variety (e.g., Blue vs Red, Blue vs Green, etc.)
-    const teamMatchupCount = new Map() // "teamNumber1-teamNumber2" -> count
-    
     // Track versus pairings - who has faced whom (to guarantee everyone faces everyone)
-    // Map: playerId -> Set of opponent playerIds they've faced
     const versusTracker = new Map()
     allPlayers.forEach(p => versusTracker.set(p.id, new Set()))
     
-    const scheduledMatches = []
-    const numberOfTeams = teams.length
-    
-    // Calculate total versus pairings needed (for logging)
-    // Each player needs to face all players from other teams
+    // Calculate versus stats for logging
     const playersPerTeam = teamData[0]?.members.length || 0
-    const versusPerPlayer = playersPerTeam * (numberOfTeams - 1) // e.g., 4 players × 3 other teams = 12
-    const totalVersusPairings = (totalPlayers * versusPerPlayer) / 2 // Divide by 2 since A vs B = B vs A
+    const versusPerPlayer = playersPerTeam * (numberOfTeams - 1)
+    const totalVersusPairings = (totalPlayers * versusPerPlayer) / 2
     console.log(`Target: ${versusPerPlayer} opponents per player, ${totalVersusPairings} total unique versus pairings`)
+    
+    const scheduledMatches = []
+    
+    // Define the fixed rotation for 4 teams (Blue=1, Red=2, Green=3, Yellow=4)
+    // Each round has 2 team matchups, each matchup produces 2 games = 4 games per round
+    // Pattern repeats every 3 rounds
+    const fourTeamRotation = [
+      // Round pattern 1: Blue vs Red, Green vs Yellow
+      [{ teamA: 1, teamB: 2 }, { teamA: 3, teamB: 4 }],
+      // Round pattern 2: Blue vs Yellow, Red vs Green
+      [{ teamA: 1, teamB: 4 }, { teamA: 2, teamB: 3 }],
+      // Round pattern 3: Blue vs Green, Red vs Yellow
+      [{ teamA: 1, teamB: 3 }, { teamA: 2, teamB: 4 }]
+    ]
+    
+    // For 2 teams, just Blue vs Red every round with 4 games
+    const twoTeamRotation = [
+      [{ teamA: 1, teamB: 2 }]
+    ]
+    
+    const rotation = numberOfTeams === 4 ? fourTeamRotation : twoTeamRotation
+    
+    // Games per matchup:
+    // - 4 teams: 2 matchups × 2 games each = 4 games per round
+    // - 2 teams: 1 matchup × 4 games = 4 games per round
+    const gamesPerMatchup = numberOfTeams === 4 ? 2 : 4
+    const gamesPerRound = 4 // Always 4 games per round
+    
+    // Target: everyone plays ~8 games
+    const targetGamesPerPlayer = 8
+    const targetRounds = Math.ceil((totalPlayers * targetGamesPerPlayer) / (gamesPerRound * 4))
+    
+    console.log(`Planning ${targetRounds} rounds with ${gamesPerRound} games each (${gamesPerMatchup} games per matchup)`)
+    console.log(`Target: each player plays ~${targetGamesPerPlayer} games`)
+    
+    // Track team matchup counts for logging
+    const teamMatchupCount = new Map()
     
     for (let round = 1; round <= targetRounds; round++) {
       const roundMatches = []
       const playersInRound = new Set()
       
-      for (let matchNum = 0; matchNum < maxMatchesPerRound; matchNum++) {
-        // Find best match to add to this round
-        const match = findBestTeamMatch(
-          teamData,
-          teamPairs,
-          playersInRound,
-          playerGameCount,
-          pairUsageCount,
-          matchupHistory,
-          numberOfTeams,
-          teamMatchupCount,
-          versusTracker
-        )
+      // Get the rotation pattern for this round (cycles every 3 rounds for 4 teams)
+      const rotationIndex = (round - 1) % rotation.length
+      const roundMatchups = rotation[rotationIndex]
+      
+      console.log(`Round ${round} (pattern ${rotationIndex + 1}): ${roundMatchups.map(m => `Team${m.teamA} vs Team${m.teamB}`).join(', ')}`)
+      
+      // For each team matchup in this round
+      for (const matchup of roundMatchups) {
+        const teamAData = teamData.find(td => td.team.team_number === matchup.teamA)
+        const teamBData = teamData.find(td => td.team.team_number === matchup.teamB)
         
-        if (match) {
-          const matchId = `match-${uuidv4()}`
-          roundMatches.push({
-            id: matchId,
-            gameDayId,
-            round,
-            group: 1,
-            court: null,
-            teamA: {
-              players: [match.pairA.player1.id, match.pairA.player2.id],
-              score: null
-            },
-            teamB: {
-              players: [match.pairB.player1.id, match.pairB.player2.id],
-              score: null
-            },
-            teamATeamId: match.pairA.teamId,
-            teamBTeamId: match.pairB.teamId,
-            bye: null,
-            status: 'pending',
-            winner: null,
-            timestamp: null
-          })
+        if (!teamAData || !teamBData) continue
+        
+        const pairsA = teamPairs.get(teamAData.team.id)
+        const pairsB = teamPairs.get(teamBData.team.id)
+        
+        // Generate 2 games for this matchup
+        for (let gameNum = 0; gameNum < gamesPerMatchup; gameNum++) {
+          // Find best pair from each team that isn't already playing this round
+          const match = findBestPairMatch(
+            pairsA,
+            pairsB,
+            playersInRound,
+            playerGameCount,
+            pairUsageCount,
+            matchupHistory,
+            versusTracker
+          )
           
-          // Update tracking
-          const matchPlayers = [
-            match.pairA.player1.id, match.pairA.player2.id,
-            match.pairB.player1.id, match.pairB.player2.id
-          ]
-          matchPlayers.forEach(pid => {
-            playersInRound.add(pid)
-            playerGameCount.set(pid, playerGameCount.get(pid) + 1)
-          })
-          
-          // Update pair usage
-          const pairAKey = [match.pairA.player1.id, match.pairA.player2.id].sort().join('-')
-          const pairBKey = [match.pairB.player1.id, match.pairB.player2.id].sort().join('-')
-          pairUsageCount.set(pairAKey, (pairUsageCount.get(pairAKey) || 0) + 1)
-          pairUsageCount.set(pairBKey, (pairUsageCount.get(pairBKey) || 0) + 1)
-          
-          // Record matchup to avoid duplicates
-          const matchupKey = [pairAKey, pairBKey].sort().join('|')
-          matchupHistory.add(matchupKey)
-          
-          // Update team vs team matchup count
-          const teamMatchupKey = [match.pairA.teamNumber, match.pairB.teamNumber].sort().join('-')
-          teamMatchupCount.set(teamMatchupKey, (teamMatchupCount.get(teamMatchupKey) || 0) + 1)
-          
-          // Update versus tracker - record who faced whom
-          const teamAPlayers = [match.pairA.player1.id, match.pairA.player2.id]
-          const teamBPlayers = [match.pairB.player1.id, match.pairB.player2.id]
-          for (const pA of teamAPlayers) {
-            for (const pB of teamBPlayers) {
-              versusTracker.get(pA).add(pB)
-              versusTracker.get(pB).add(pA)
+          if (match) {
+            const matchId = `match-${uuidv4()}`
+            roundMatches.push({
+              id: matchId,
+              gameDayId,
+              round,
+              group: 1,
+              court: null,
+              teamA: {
+                players: [match.pairA.player1.id, match.pairA.player2.id],
+                score: null
+              },
+              teamB: {
+                players: [match.pairB.player1.id, match.pairB.player2.id],
+                score: null
+              },
+              teamATeamId: match.pairA.teamId,
+              teamBTeamId: match.pairB.teamId,
+              bye: null,
+              status: 'pending',
+              winner: null,
+              timestamp: null
+            })
+            
+            // Update tracking
+            const matchPlayers = [
+              match.pairA.player1.id, match.pairA.player2.id,
+              match.pairB.player1.id, match.pairB.player2.id
+            ]
+            matchPlayers.forEach(pid => {
+              playersInRound.add(pid)
+              playerGameCount.set(pid, playerGameCount.get(pid) + 1)
+            })
+            
+            // Update pair usage
+            const pairAKey = [match.pairA.player1.id, match.pairA.player2.id].sort().join('-')
+            const pairBKey = [match.pairB.player1.id, match.pairB.player2.id].sort().join('-')
+            pairUsageCount.set(pairAKey, (pairUsageCount.get(pairAKey) || 0) + 1)
+            pairUsageCount.set(pairBKey, (pairUsageCount.get(pairBKey) || 0) + 1)
+            
+            // Record matchup
+            const matchupKey = [pairAKey, pairBKey].sort().join('|')
+            matchupHistory.add(matchupKey)
+            
+            // Update team matchup count
+            const teamMatchupKey = [match.pairA.teamNumber, match.pairB.teamNumber].sort().join('-')
+            teamMatchupCount.set(teamMatchupKey, (teamMatchupCount.get(teamMatchupKey) || 0) + 1)
+            
+            // Update versus tracker
+            const teamAPlayers = [match.pairA.player1.id, match.pairA.player2.id]
+            const teamBPlayers = [match.pairB.player1.id, match.pairB.player2.id]
+            for (const pA of teamAPlayers) {
+              for (const pB of teamBPlayers) {
+                versusTracker.get(pA).add(pB)
+                versusTracker.get(pB).add(pA)
+              }
             }
           }
         }
@@ -1150,7 +1188,76 @@ async function generateTeamsMatches(gameDayId, gameDay, res) {
   }
 }
 
-// Find the best match to add to a round - prioritises versus coverage, then fair play distribution
+// Find the best pair match between two specific teams - used by fixed rotation algorithm
+function findBestPairMatch(pairsA, pairsB, playersInRound, playerGameCount, pairUsageCount, matchupHistory, versusTracker) {
+  let bestMatch = null
+  let bestScore = Infinity // Lower is better
+  
+  for (const pairA of pairsA) {
+    // Skip if any player already in this round
+    if (playersInRound.has(pairA.player1.id) || playersInRound.has(pairA.player2.id)) {
+      continue
+    }
+    
+    for (const pairB of pairsB) {
+      // Skip if any player already in this round
+      if (playersInRound.has(pairB.player1.id) || playersInRound.has(pairB.player2.id)) {
+        continue
+      }
+      
+      // Check if this exact matchup has already been used
+      const pairAKey = [pairA.player1.id, pairA.player2.id].sort().join('-')
+      const pairBKey = [pairB.player1.id, pairB.player2.id].sort().join('-')
+      const matchupKey = [pairAKey, pairBKey].sort().join('|')
+      
+      // Penalty for duplicate matchups
+      const duplicateCount = matchupHistory.has(matchupKey) ? 1 : 0
+      
+      // Calculate how many NEW versus pairings this match would cover
+      const teamAPlayers = [pairA.player1.id, pairA.player2.id]
+      const teamBPlayers = [pairB.player1.id, pairB.player2.id]
+      let newVersusPairings = 0
+      for (const pAId of teamAPlayers) {
+        for (const pBId of teamBPlayers) {
+          if (!versusTracker.get(pAId).has(pBId)) {
+            newVersusPairings++
+          }
+        }
+      }
+      // Max possible new pairings per match is 4 (2x2)
+      // Invert so that MORE new pairings = LOWER score (better)
+      const versusCoverageBonus = (4 - newVersusPairings) * 100
+      
+      // Calculate fairness score - prioritise players who have played fewer games
+      const playersInMatch = [
+        pairA.player1.id, pairA.player2.id,
+        pairB.player1.id, pairB.player2.id
+      ]
+      const totalGamesPlayed = playersInMatch.reduce(
+        (sum, pid) => sum + playerGameCount.get(pid), 0
+      )
+      
+      // Also consider pair usage variety (spread partnerships around)
+      const pairUsage = (pairUsageCount.get(pairAKey) || 0) + (pairUsageCount.get(pairBKey) || 0)
+      
+      // Score components (lower = better):
+      // 1. HIGHEST PRIORITY: Versus coverage - matches that create NEW opponent pairings
+      // 2. Fair play (players with fewer games first)
+      // 3. Partnership variety
+      // 4. Duplicate matchup penalty
+      let score = versusCoverageBonus + (totalGamesPlayed * 10) + pairUsage + (duplicateCount * 50)
+      
+      if (score < bestScore) {
+        bestScore = score
+        bestMatch = { pairA, pairB }
+      }
+    }
+  }
+  
+  return bestMatch
+}
+
+// Legacy function - Find the best match to add to a round (kept for potential future use)
 function findBestTeamMatch(teamData, teamPairs, playersInRound, playerGameCount, pairUsageCount, matchupHistory, numberOfTeams, teamMatchupCount, versusTracker) {
   let bestMatch = null
   let bestScore = Infinity // Lower is better

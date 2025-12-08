@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { teamsAPI, gameDayAPI, matchAPI } from '../../services/api'
+import { ConfirmModal } from '../Alert'
 
 const TEAM_COLORS = {
   blue: {
@@ -49,6 +50,7 @@ export function TeamsTab({ gameDayId, settings, onUpdate, isAdminMode = false })
   const [swapMode, setSwapMode] = useState(false)
   const [selectedPlayer, setSelectedPlayer] = useState(null) // { playerId, playerName, teamId, teamName }
   const [swapping, setSwapping] = useState(false)
+  const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: '', message: '', onConfirm: null })
   
   useEffect(() => {
     loadData()
@@ -114,16 +116,21 @@ export function TeamsTab({ gameDayId, settings, onUpdate, isAdminMode = false })
     }
   }
   
-  async function handleClearDraw() {
-    // Confirm before clearing
+  function handleClearDraw() {
+    const title = hasScores ? 'Delete All Matches?' : 'Clear Draw?'
     const message = hasScores 
-      ? 'WARNING: This will DELETE ALL MATCHES including entered scores!\n\nAre you sure you want to clear the draw?'
-      : 'This will clear the current draw so you can modify teams and regenerate.\n\nContinue?'
+      ? 'WARNING: This will DELETE ALL MATCHES including entered scores!\n\nAll match results will be permanently lost. You will be able to modify teams and generate a new draw.'
+      : 'This will clear the current draw so you can modify teams and regenerate.\n\nNo scores have been entered yet, so no data will be lost.'
     
-    if (!window.confirm(message)) {
-      return
-    }
-    
+    setConfirmModal({
+      isOpen: true,
+      title,
+      message,
+      onConfirm: confirmClearDraw
+    })
+  }
+  
+  async function confirmClearDraw() {
     setClearingDraw(true)
     setError(null)
     
@@ -576,6 +583,17 @@ export function TeamsTab({ gameDayId, settings, onUpdate, isAdminMode = false })
           </div>
         </div>
       )}
+      
+      {/* Confirm Modal for Clear Draw */}
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        onClose={() => setConfirmModal({ ...confirmModal, isOpen: false })}
+        onConfirm={confirmModal.onConfirm}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        confirmText={hasScores ? 'Yes, Delete All Matches' : 'Clear Draw'}
+        confirmColor={hasScores ? 'red' : 'black'}
+      />
     </div>
   )
 }
