@@ -1004,24 +1004,25 @@ async function generateTeamsMatches(gameDayId, gameDay, res) {
       [{ teamA: 1, teamB: 3 }, { teamA: 2, teamB: 4 }]
     ]
     
-    // For 2 teams, just Blue vs Red every round with 4 games
+    // For 2 teams, just Blue vs Red every round
     const twoTeamRotation = [
       [{ teamA: 1, teamB: 2 }]
     ]
     
     const rotation = numberOfTeams === 4 ? fourTeamRotation : twoTeamRotation
     
-    // Games per matchup:
-    // - 4 teams: 2 matchups × 2 games each = 4 games per round
-    // - 2 teams: 1 matchup × 4 games = 4 games per round
-    const gamesPerMatchup = numberOfTeams === 4 ? 2 : 4
-    const gamesPerRound = 4 // Always 4 games per round
+    // Games per round:
+    // - 4 teams: Fixed 4 games (2 matchups × 2 games each)
+    // - 2 teams: Scales with player count (everyone plays each round)
+    const maxMatchesPerRound = Math.floor(totalPlayers / 4)
+    const gamesPerRound = numberOfTeams === 4 ? 4 : maxMatchesPerRound
+    const gamesPerMatchup = numberOfTeams === 4 ? 2 : maxMatchesPerRound
     
     // Target: everyone plays ~8 games
     const targetGamesPerPlayer = 8
     const targetRounds = Math.ceil((totalPlayers * targetGamesPerPlayer) / (gamesPerRound * 4))
     
-    console.log(`Planning ${targetRounds} rounds with ${gamesPerRound} games each (${gamesPerMatchup} games per matchup)`)
+    console.log(`Planning ${targetRounds} rounds with ${gamesPerRound} games each`)
     console.log(`Target: each player plays ~${targetGamesPerPlayer} games`)
     
     // Track team matchup counts for logging
