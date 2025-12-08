@@ -43,7 +43,9 @@ export function TeamsTab({ gameDayId, settings, onUpdate, isAdminMode = false })
   const [error, setError] = useState(null)
   const [generating, setGenerating] = useState(false)
   const [generatingDraw, setGeneratingDraw] = useState(false)
+  const [clearingDraw, setClearingDraw] = useState(false)
   const [hasMatches, setHasMatches] = useState(false)
+  const [hasScores, setHasScores] = useState(false) // Whether any matches have scores entered
   const [swapMode, setSwapMode] = useState(false)
   const [selectedPlayer, setSelectedPlayer] = useState(null) // { playerId, playerName, teamId, teamName }
   const [swapping, setSwapping] = useState(false)
@@ -62,6 +64,7 @@ export function TeamsTab({ gameDayId, settings, onUpdate, isAdminMode = false })
       
       setTeams(teamsData)
       setHasMatches(matchesData.length > 0)
+      setHasScores(matchesData.some(m => m.teamA?.score !== null || m.teamB?.score !== null))
       
       // Load standings if matches exist
       if (matchesData.length > 0) {
@@ -108,6 +111,31 @@ export function TeamsTab({ gameDayId, settings, onUpdate, isAdminMode = false })
       setError(err.message)
     } finally {
       setGeneratingDraw(false)
+    }
+  }
+  
+  async function handleClearDraw() {
+    // Confirm before clearing
+    const message = hasScores 
+      ? 'WARNING: This will DELETE ALL MATCHES including entered scores!\n\nAre you sure you want to clear the draw?'
+      : 'This will clear the current draw so you can modify teams and regenerate.\n\nContinue?'
+    
+    if (!window.confirm(message)) {
+      return
+    }
+    
+    setClearingDraw(true)
+    setError(null)
+    
+    try {
+      await gameDayAPI.cancelDraw(gameDayId)
+      await loadData() // Reload to reflect cleared state
+      if (onUpdate) onUpdate() // Notify parent to reload
+    } catch (err) {
+      console.error('Error clearing draw:', err)
+      setError(err.message)
+    } finally {
+      setClearingDraw(false)
     }
   }
   
@@ -198,6 +226,9 @@ export function TeamsTab({ gameDayId, settings, onUpdate, isAdminMode = false })
           {teams.length > 0 && !hasMatches && (
             <p className="text-sm text-gray-600 mt-1">Teams are ready. Generate the draw to create matches.</p>
           )}
+          {teams.length > 0 && hasMatches && !hasScores && (
+            <p className="text-sm text-gray-600 mt-1">Draw generated. Clear the draw to modify teams.</p>
+          )}
         </div>
         
         <div className="flex gap-2">
@@ -241,6 +272,21 @@ export function TeamsTab({ gameDayId, settings, onUpdate, isAdminMode = false })
                 {generatingDraw ? 'Generating...' : 'Generate Draw'}
               </button>
             </>
+          )}
+          
+          {/* Admin-only: Clear Draw button (when matches exist) */}
+          {isAdminMode && teams.length > 0 && hasMatches && (
+            <button
+              onClick={handleClearDraw}
+              disabled={clearingDraw}
+              className={`px-4 py-2 text-sm font-medium transition-colors ${
+                hasScores
+                  ? 'bg-red-600 text-white hover:bg-red-700 disabled:bg-gray-400'
+                  : 'border border-red-500 text-red-600 hover:bg-red-50 disabled:border-gray-300 disabled:text-gray-400'
+              }`}
+            >
+              {clearingDraw ? 'Clearing...' : 'Clear Draw'}
+            </button>
           )}
           
           {/* Refresh button - available to everyone */}
