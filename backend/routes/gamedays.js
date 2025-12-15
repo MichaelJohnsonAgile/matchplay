@@ -953,9 +953,9 @@ async function generateTeamsMatches(gameDayId, gameDay, res) {
 }
 
 // Generate matches for 2-team format (Blue vs Red)
-// Simple rank-based pairing with rotation:
-// - Pairs: 1+6, 2+5, 3+4 (highest + lowest ranks)
-// - Rotate matchups each round so everyone faces different opponents
+// Rotating partnerships AND matchups:
+// - Partnerships change each round (rotate through different partner combos)
+// - Blue rotates forward, Red rotates backward (inverse rotation)
 // - 8 rounds, 3 matches per round
 async function generateTwoTeamsMatches(gameDayId, teamData, res) {
   const blueTeam = teamData[0] // Team 1 = Blue
@@ -972,66 +972,49 @@ async function generateTwoTeamsMatches(gameDayId, teamData, res) {
   console.log('Blue players by rank:', bluePlayers.map(p => `${p.name}(${p.rank})`).join(', '))
   console.log('Red players by rank:', redPlayers.map(p => `${p.name}(${p.rank})`).join(', '))
   
-  // Create fixed pairs based on rank: 1+6, 2+5, 3+4 (highest + lowest)
-  const createRankPairs = (players, teamId, teamNumber) => {
-    const pairs = []
-    const n = players.length
-    const numPairs = Math.floor(n / 2)
-    
-    for (let i = 0; i < numPairs; i++) {
-      const highRankPlayer = players[i]           // 0, 1, 2 (ranks 1, 2, 3)
-      const lowRankPlayer = players[n - 1 - i]    // 5, 4, 3 (ranks 6, 5, 4)
-      
-      pairs.push({
-        teamId,
-        teamNumber,
-        player1: highRankPlayer,
-        player2: lowRankPlayer,
-        label: `Rank ${i + 1} + ${n - i}`
-      })
-      
-      console.log(`  Pair ${i + 1}: ${highRankPlayer.name}(${highRankPlayer.rank}) + ${lowRankPlayer.name}(${lowRankPlayer.rank})`)
-    }
-    
-    return pairs
-  }
+  // Partnership rotations for 6 players (indices 0-5 representing ranks 1-6)
+  // Each config has 3 pairs that cover all 6 players
+  // Designed so each player partners with different people across rounds
+  const partnershipRotations = [
+    [[0, 5], [1, 4], [2, 3]],  // Round 1: 1+6, 2+5, 3+4
+    [[0, 4], [1, 3], [2, 5]],  // Round 2: 1+5, 2+4, 3+6
+    [[0, 3], [1, 2], [4, 5]],  // Round 3: 1+4, 2+3, 5+6
+    [[0, 2], [1, 5], [3, 4]],  // Round 4: 1+3, 2+6, 4+5
+    [[0, 1], [2, 4], [3, 5]],  // Round 5: 1+2, 3+5, 4+6
+    [[0, 5], [1, 3], [2, 4]],  // Round 6: 1+6, 2+4, 3+5
+    [[0, 4], [1, 2], [3, 5]],  // Round 7: 1+5, 2+3, 4+6
+    [[0, 3], [1, 4], [2, 5]],  // Round 8: 1+4, 2+5, 3+6
+  ]
   
-  console.log('Blue pairs:')
-  const bluePairs = createRankPairs(bluePlayers, blueTeam.team.id, 1)
-  console.log('Red pairs:')
-  const redPairs = createRankPairs(redPlayers, redTeam.team.id, 2)
-  
-  const numPairs = bluePairs.length // Should be 3 for 6 players
   const numberOfRounds = 8
-  
-  console.log(`${numPairs} pairs per team, ${numberOfRounds} rounds`)
-  
-  // Generate rotation schedule
-  // Round 1: Blue[0] vs Red[0], Blue[1] vs Red[1], Blue[2] vs Red[2]
-  // Round 2: Blue[0] vs Red[1], Blue[1] vs Red[2], Blue[2] vs Red[0]
-  // Round 3: Blue[0] vs Red[2], Blue[1] vs Red[0], Blue[2] vs Red[1]
-  // Then repeat with inverse rotation for variety
   const scheduledMatches = []
   
   for (let round = 1; round <= numberOfRounds; round++) {
     console.log(`\nRound ${round}:`)
     
-    // Calculate rotation offset for this round
-    // Alternate between forward and backward rotation for variety
-    const rotationOffset = (round - 1) % numPairs
-    const reverseBlue = Math.floor((round - 1) / numPairs) % 2 === 1
+    // Blue team uses rotations going forward (0, 1, 2, 3, 4, 5, 6, 7)
+    const blueRotationIdx = (round - 1) % partnershipRotations.length
     
-    for (let matchIdx = 0; matchIdx < numPairs; matchIdx++) {
-      // Blue pair index - optionally reverse order every numPairs rounds
-      const blueIdx = reverseBlue ? (numPairs - 1 - matchIdx) : matchIdx
+    // Red team uses rotations going backward (inverse) for variety
+    // This ensures Blue and Red pairs don't always match up the same way
+    const redRotationIdx = (partnershipRotations.length - 1 - ((round - 1) % partnershipRotations.length))
+    
+    const bluePairings = partnershipRotations[blueRotationIdx]
+    const redPairings = partnershipRotations[redRotationIdx]
+    
+    console.log(`  Blue rotation: ${blueRotationIdx + 1}, Red rotation: ${redRotationIdx + 1}`)
+    
+    // Create 3 matches for this round
+    for (let matchIdx = 0; matchIdx < 3; matchIdx++) {
+      const bluePair = bluePairings[matchIdx]
+      const redPair = redPairings[matchIdx]
       
-      // Red pair index - rotate based on round
-      const redIdx = (matchIdx + rotationOffset) % numPairs
+      const bluePlayer1 = bluePlayers[bluePair[0]]
+      const bluePlayer2 = bluePlayers[bluePair[1]]
+      const redPlayer1 = redPlayers[redPair[0]]
+      const redPlayer2 = redPlayers[redPair[1]]
       
-      const bluePair = bluePairs[blueIdx]
-      const redPair = redPairs[redIdx]
-      
-      console.log(`  Match ${matchIdx + 1}: ${bluePair.player1.name}+${bluePair.player2.name} vs ${redPair.player1.name}+${redPair.player2.name}`)
+      console.log(`  Match ${matchIdx + 1}: ${bluePlayer1.name}+${bluePlayer2.name} vs ${redPlayer1.name}+${redPlayer2.name}`)
       
       const matchId = `match-${uuidv4()}`
       scheduledMatches.push({
@@ -1041,15 +1024,15 @@ async function generateTwoTeamsMatches(gameDayId, teamData, res) {
         group: 1,
         court: null,
         teamA: {
-          players: [bluePair.player1.id, bluePair.player2.id],
+          players: [bluePlayer1.id, bluePlayer2.id],
           score: null
         },
         teamB: {
-          players: [redPair.player1.id, redPair.player2.id],
+          players: [redPlayer1.id, redPlayer2.id],
           score: null
         },
-        teamATeamId: bluePair.teamId,
-        teamBTeamId: redPair.teamId,
+        teamATeamId: blueTeam.team.id,
+        teamBTeamId: redTeam.team.id,
         bye: null,
         status: 'pending',
         winner: null,
@@ -1067,7 +1050,7 @@ async function generateTwoTeamsMatches(gameDayId, teamData, res) {
   const gamesPerPlayer = numberOfRounds // Everyone plays once per round
   
   console.log(`\n✅ Generated ${totalMatches} team matches across ${numberOfRounds} rounds`)
-  console.log(`Each player plays ${gamesPerPlayer} games`)
+  console.log(`Each player plays ${gamesPerPlayer} games with different partners each round`)
   
   return res.json({
     message: 'Teams matches generated successfully',
