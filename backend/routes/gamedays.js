@@ -953,8 +953,8 @@ async function generateTeamsMatches(gameDayId, gameDay, res) {
 }
 
 // Generate matches for 2-team format (Blue vs Red)
-// This algorithm ensures every player faces every opponent from the other team
-// with exactly 3 matches per round (for 12 players)
+// Fixed 8 rounds, 3 matches per round (for 12 players)
+// Prioritises: 1) Partnership variety 2) Versus coverage 3) Avoid duplicate matchups
 async function generateTwoTeamsMatches(gameDayId, teamData, res) {
   const blueTeam = teamData[0] // Team 1 = Blue
   const redTeam = teamData[1]  // Team 2 = Red
@@ -967,11 +967,13 @@ async function generateTwoTeamsMatches(gameDayId, teamData, res) {
   const totalPlayers = blueCount + redCount
   const matchesPerRound = Math.floor(totalPlayers / 4) // 3 matches for 12 players
   
-  console.log(`2-Team mode: ${blueCount} Blue vs ${redCount} Red`)
-  console.log(`Matches per round: ${matchesPerRound}`)
+  // Fixed number of rounds
+  const numberOfRounds = 8
   
-  // Track all versus pairings that need to be covered
-  // Each Blue player must face each Red player at least once
+  console.log(`2-Team mode: ${blueCount} Blue vs ${redCount} Red`)
+  console.log(`Matches per round: ${matchesPerRound}, Total rounds: ${numberOfRounds}`)
+  
+  // Track all versus pairings (Blue player vs Red player)
   const versusTracker = new Map()
   const allPlayers = [...bluePlayers, ...redPlayers]
   allPlayers.forEach(p => versusTracker.set(p.id, new Set()))
@@ -980,15 +982,18 @@ async function generateTwoTeamsMatches(gameDayId, teamData, res) {
   const playerGameCount = new Map()
   allPlayers.forEach(p => playerGameCount.set(p.id, 0))
   
-  // Track pair usage to vary partnerships
-  const pairUsageCount = new Map()
+  // Track partnership usage (how many times each pair of teammates has played together)
+  const partnershipCount = new Map()
   
-  // Track matchup history to avoid exact duplicate matches
-  const matchupHistory = new Set()
+  // Track matchup history (exact 4-player combinations)
+  const matchupHistory = new Map() // matchKey -> count
   
-  // Calculate required coverage
-  const versusPerPlayer = blueCount === redCount ? redCount : Math.max(blueCount, redCount)
+  // Calculate targets
+  const partnersPerPlayer = blueCount - 1 // 5 teammates for 6-player teams
+  const opponentsPerPlayer = redCount // 6 opponents for 6-player opposing team
   const totalVersusPairings = blueCount * redCount
+  
+  console.log(`Each player has ${partnersPerPlayer} possible partners and ${opponentsPerPlayer} opponents`)
   console.log(`Target: ${totalVersusPairings} unique Blue-Red pairings to cover`)
   
   // Generate all possible pairs per team
@@ -996,13 +1001,16 @@ async function generateTwoTeamsMatches(gameDayId, teamData, res) {
     const pairs = []
     for (let i = 0; i < members.length; i++) {
       for (let j = i + 1; j < members.length; j++) {
+        const key = [members[i].id, members[j].id].sort().join('-')
         pairs.push({
           teamId,
           teamNumber,
           player1: members[i],
           player2: members[j],
-          key: [members[i].id, members[j].id].sort().join('-')
+          key
         })
+        // Initialise partnership count
+        partnershipCount.set(key, 0)
       }
     }
     return pairs
@@ -1037,33 +1045,27 @@ async function generateTwoTeamsMatches(gameDayId, teamData, res) {
   console.log(`Total possible matches: ${allPossibleMatches.length}`)
   
   // Schedule matches into rounds
-  // Goal: Cover all versus pairings while maintaining fairness
   const scheduledMatches = []
-  let round = 1
-  let coveredPairings = new Set()
+  const coveredPairings = new Set()
   
-  // Keep scheduling until we've covered all pairings OR reached a reasonable limit
-  const maxRounds = Math.ceil(totalVersusPairings / (matchesPerRound * 4)) + 3 // Extra rounds for flexibility
-  
-  while (round <= maxRounds) {
+  for (let round = 1; round <= numberOfRounds; round++) {
     const roundMatches = []
     const playersInRound = new Set()
     
-    // Try to fill this round with exactly matchesPerRound matches
+    // Fill this round with exactly matchesPerRound matches
     for (let matchNum = 0; matchNum < matchesPerRound; matchNum++) {
       // Find the best match to add
       const bestMatch = findBestTwoTeamMatch(
         allPossibleMatches,
         playersInRound,
         playerGameCount,
-        pairUsageCount,
+        partnershipCount,
         matchupHistory,
-        versusTracker,
         coveredPairings
       )
       
       if (!bestMatch) {
-        // No valid match can be added to this round
+        console.log(`Warning: Could not find valid match for round ${round}, match ${matchNum + 1}`)
         break
       }
       
@@ -1101,14 +1103,14 @@ async function generateTwoTeamsMatches(gameDayId, teamData, res) {
         playerGameCount.set(pid, playerGameCount.get(pid) + 1)
       })
       
-      // Update pair usage
-      pairUsageCount.set(bestMatch.bluePair.key, (pairUsageCount.get(bestMatch.bluePair.key) || 0) + 1)
-      pairUsageCount.set(bestMatch.redPair.key, (pairUsageCount.get(bestMatch.redPair.key) || 0) + 1)
+      // Update partnership counts
+      partnershipCount.set(bestMatch.bluePair.key, partnershipCount.get(bestMatch.bluePair.key) + 1)
+      partnershipCount.set(bestMatch.redPair.key, partnershipCount.get(bestMatch.redPair.key) + 1)
       
-      // Record matchup
-      matchupHistory.add(bestMatch.matchKey)
+      // Update matchup history
+      matchupHistory.set(bestMatch.matchKey, (matchupHistory.get(bestMatch.matchKey) || 0) + 1)
       
-      // Update versus tracker and covered pairings
+      // Update versus coverage
       for (const vp of bestMatch.versusPairings) {
         versusTracker.get(vp.blue).add(vp.red)
         versusTracker.get(vp.red).add(vp.blue)
@@ -1116,18 +1118,8 @@ async function generateTwoTeamsMatches(gameDayId, teamData, res) {
       }
     }
     
-    if (roundMatches.length > 0) {
-      console.log(`Round ${round}: ${roundMatches.length} matches`)
-      scheduledMatches.push(...roundMatches)
-    }
-    
-    // Check if we've achieved full coverage
-    if (coveredPairings.size >= totalVersusPairings) {
-      console.log(`Full versus coverage achieved after round ${round}`)
-      break
-    }
-    
-    round++
+    console.log(`Round ${round}: ${roundMatches.length} matches`)
+    scheduledMatches.push(...roundMatches)
   }
   
   // Log statistics
@@ -1139,15 +1131,16 @@ async function generateTwoTeamsMatches(gameDayId, teamData, res) {
   console.log(`Games per player: min=${minGames}, max=${maxGames}, avg=${avgGames}`)
   console.log(`Versus coverage: ${coveredPairings.size}/${totalVersusPairings} pairings (${((coveredPairings.size / totalVersusPairings) * 100).toFixed(1)}%)`)
   
+  // Log partnership distribution
+  const partnershipCounts = Array.from(partnershipCount.values())
+  const minPartnership = Math.min(...partnershipCounts)
+  const maxPartnership = Math.max(...partnershipCounts)
+  console.log(`Partnership usage: min=${minPartnership}, max=${maxPartnership} times`)
+  
   // Log per-player coverage
   let minOpponents = Infinity
   let maxOpponents = 0
-  for (const player of bluePlayers) {
-    const opponents = versusTracker.get(player.id).size
-    minOpponents = Math.min(minOpponents, opponents)
-    maxOpponents = Math.max(maxOpponents, opponents)
-  }
-  for (const player of redPlayers) {
+  for (const player of [...bluePlayers, ...redPlayers]) {
     const opponents = versusTracker.get(player.id).size
     minOpponents = Math.min(minOpponents, opponents)
     maxOpponents = Math.max(maxOpponents, opponents)
@@ -1159,13 +1152,12 @@ async function generateTwoTeamsMatches(gameDayId, teamData, res) {
     await db.createMatch(match)
   }
   
-  const totalRounds = Math.max(...scheduledMatches.map(m => m.round))
-  console.log(`✅ Generated ${scheduledMatches.length} team matches across ${totalRounds} rounds`)
+  console.log(`✅ Generated ${scheduledMatches.length} team matches across ${numberOfRounds} rounds`)
   
   return res.json({
     message: 'Teams matches generated successfully',
     matchesGenerated: scheduledMatches.length,
-    rounds: totalRounds,
+    rounds: numberOfRounds,
     teams: 2,
     format: 'teams',
     gamesPerPlayer: { min: minGames, max: maxGames, avg: parseFloat(avgGames) },
@@ -1174,14 +1166,14 @@ async function generateTwoTeamsMatches(gameDayId, teamData, res) {
   })
 }
 
-// Find the best match for 2-team mode - prioritises versus coverage
+// Find the best match for 2-team mode
+// Priority: 1) Partnership variety 2) Versus coverage 3) Avoid duplicate matchups
 function findBestTwoTeamMatch(
   allPossibleMatches,
   playersInRound,
   playerGameCount,
-  pairUsageCount,
+  partnershipCount,
   matchupHistory,
-  versusTracker,
   coveredPairings
 ) {
   let bestMatch = null
@@ -1198,33 +1190,39 @@ function findBestTwoTeamMatch(
       continue
     }
     
-    // Calculate how many NEW versus pairings this match would cover
-    let newPairings = 0
+    // 1. HIGHEST PRIORITY: Partnership variety
+    // Prefer pairs that have played together LESS
+    const bluePartnershipUsage = partnershipCount.get(match.bluePair.key) || 0
+    const redPartnershipUsage = partnershipCount.get(match.redPair.key) || 0
+    const totalPartnershipUsage = bluePartnershipUsage + redPartnershipUsage
+    
+    // 2. Versus coverage - prefer matches that create NEW opponent pairings
+    let newVersusPairings = 0
     for (const vp of match.versusPairings) {
       const key = `${vp.blue}-${vp.red}`
       if (!coveredPairings.has(key)) {
-        newPairings++
+        newVersusPairings++
       }
     }
     
-    // Calculate fairness - prefer players who have played fewer games
+    // 3. Avoid exact duplicate matchups (same 4 players)
+    const matchupCount = matchupHistory.get(match.matchKey) || 0
+    
+    // 4. Fairness - prefer players who have played fewer games
     const totalGamesPlayed = matchPlayers.reduce(
       (sum, pid) => sum + playerGameCount.get(pid), 0
     )
     
-    // Calculate pair variety - prefer less-used partnerships
-    const pairUsage = (pairUsageCount.get(match.bluePair.key) || 0) + 
-                      (pairUsageCount.get(match.redPair.key) || 0)
-    
-    // Penalty for duplicate exact matchups
-    const isDuplicate = matchupHistory.has(match.matchKey) ? 1 : 0
-    
     // Score calculation (higher = better):
-    // 1. HIGHEST PRIORITY: New versus pairings (×1000)
-    // 2. Fair play - prefer players with fewer games (×10, inverted)
-    // 3. Partnership variety - prefer less-used pairs (×5, inverted)
-    // 4. Avoid duplicate matchups (×100, penalty)
-    const score = (newPairings * 1000) - (totalGamesPlayed * 10) - (pairUsage * 5) - (isDuplicate * 100)
+    // - Partnership variety: MOST IMPORTANT - heavily penalise repeat partnerships (×1000)
+    // - New versus pairings: reward covering new opponents (×100)
+    // - Duplicate matchup: penalise exact same 4-player combo (×500)
+    // - Fairness: slight preference for players with fewer games (×1)
+    const score = 
+      -(totalPartnershipUsage * 1000) +  // Lower partnership usage = higher score
+      (newVersusPairings * 100) +         // More new pairings = higher score
+      -(matchupCount * 500) +             // Fewer repeats of exact match = higher score
+      -(totalGamesPlayed * 1)             // Fewer total games = higher score
     
     if (score > bestScore) {
       bestScore = score
