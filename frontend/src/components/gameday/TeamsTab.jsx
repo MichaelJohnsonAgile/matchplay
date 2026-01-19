@@ -60,6 +60,14 @@ export function TeamsTab({ gameDayId, settings, onUpdate, isAdminMode = false })
   const [deletingPair, setDeletingPair] = useState(null)
   const [autoAllocating, setAutoAllocating] = useState(false)
   
+  // Finals state (pairs mode)
+  const [allRoundRobinComplete, setAllRoundRobinComplete] = useState(false)
+  const [hasSemiFinals, setHasSemiFinals] = useState(false)
+  const [allSemiFinalsComplete, setAllSemiFinalsComplete] = useState(false)
+  const [hasFinals, setHasFinals] = useState(false)
+  const [generatingSemiFinals, setGeneratingSemiFinals] = useState(false)
+  const [generatingFinals, setGeneratingFinals] = useState(false)
+  
   const isPairsMode = settings?.format === 'pairs'
   
   useEffect(() => {
@@ -90,6 +98,22 @@ export function TeamsTab({ gameDayId, settings, onUpdate, isAdminMode = false })
       if (isPairsMode) {
         const available = await teamsAPI.getAvailableAthletes(gameDayId)
         setAvailableAthletes(available)
+        
+        // Calculate finals status
+        const roundRobinMatches = matchesData.filter(m => m.round > 0)
+        const semiFinalMatches = matchesData.filter(m => m.round === -1)
+        const finalMatches = matchesData.filter(m => m.round === -2)
+        
+        const allRRComplete = roundRobinMatches.length > 0 && 
+          roundRobinMatches.every(m => m.winner !== null)
+        setAllRoundRobinComplete(allRRComplete)
+        
+        setHasSemiFinals(semiFinalMatches.length > 0)
+        const allSFComplete = semiFinalMatches.length > 0 && 
+          semiFinalMatches.every(m => m.winner !== null)
+        setAllSemiFinalsComplete(allSFComplete)
+        
+        setHasFinals(finalMatches.length > 0)
       }
       
       setError(null)
@@ -309,6 +333,38 @@ export function TeamsTab({ gameDayId, settings, onUpdate, isAdminMode = false })
     }
   }
   
+  async function handleGenerateSemiFinals() {
+    setGeneratingSemiFinals(true)
+    setError(null)
+    
+    try {
+      await gameDayAPI.generateSemiFinals(gameDayId)
+      await loadData()
+      if (onUpdate) onUpdate()
+    } catch (err) {
+      console.error('Error generating semi-finals:', err)
+      setError(err.message || 'Failed to generate semi-finals')
+    } finally {
+      setGeneratingSemiFinals(false)
+    }
+  }
+  
+  async function handleGenerateFinals() {
+    setGeneratingFinals(true)
+    setError(null)
+    
+    try {
+      await gameDayAPI.generateFinals(gameDayId)
+      await loadData()
+      if (onUpdate) onUpdate()
+    } catch (err) {
+      console.error('Error generating finals:', err)
+      setError(err.message || 'Failed to generate finals')
+    } finally {
+      setGeneratingFinals(false)
+    }
+  }
+  
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -473,6 +529,28 @@ export function TeamsTab({ gameDayId, settings, onUpdate, isAdminMode = false })
               </svg>
               Refresh
             </button>
+            
+            {/* Generate Semi-Finals button - show when round-robin complete, no semi-finals yet */}
+            {isAdminMode && allRoundRobinComplete && !hasSemiFinals && teams.length >= 4 && (
+              <button
+                onClick={handleGenerateSemiFinals}
+                disabled={generatingSemiFinals}
+                className="bg-amber-500 text-white px-4 py-2 text-sm font-medium hover:bg-amber-600 disabled:bg-gray-400"
+              >
+                {generatingSemiFinals ? 'Generating...' : 'Generate Semi-Finals'}
+              </button>
+            )}
+            
+            {/* Generate Finals button - show when semi-finals complete, no finals yet */}
+            {isAdminMode && allSemiFinalsComplete && !hasFinals && (
+              <button
+                onClick={handleGenerateFinals}
+                disabled={generatingFinals}
+                className="bg-amber-600 text-white px-4 py-2 text-sm font-medium hover:bg-amber-700 disabled:bg-gray-400"
+              >
+                {generatingFinals ? 'Generating...' : 'Generate Finals'}
+              </button>
+            )}
           </div>
         )}
       </div>

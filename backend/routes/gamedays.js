@@ -1622,3 +1622,262 @@ async function generatePairsMatches(gameDayId, gameDay, res) {
   }
 }
 
+// ============= PAIRS FINALS GENERATION =============
+
+// POST /api/gamedays/:id/generate-semi-finals - Generate semi-finals for pairs mode
+gameDayRoutes.post('/:id/generate-semi-finals', async (req, res) => {
+  try {
+    const gameDayId = req.params.id
+    const gameDay = await db.getGameDayById(gameDayId)
+    
+    if (!gameDay) {
+      return res.status(404).json({ error: 'Game day not found' })
+    }
+    
+    if (gameDay.format !== 'pairs') {
+      return res.status(400).json({ error: 'Semi-finals are only available for pairs mode' })
+    }
+    
+    // Check if round-robin matches are complete
+    const roundRobinStatus = await db.areMatchesComplete(gameDayId, null)
+    if (!roundRobinStatus.allComplete) {
+      return res.status(400).json({
+        error: 'Cannot generate semi-finals: not all round-robin matches are complete',
+        completed: roundRobinStatus.completed,
+        total: roundRobinStatus.total
+      })
+    }
+    
+    // Check if semi-finals already exist
+    const existingSemiFinals = await db.getMatchesByRound(gameDayId, -1)
+    if (existingSemiFinals.length > 0) {
+      return res.status(400).json({
+        error: 'Semi-finals have already been generated',
+        existingMatches: existingSemiFinals.length
+      })
+    }
+    
+    // Get pair standings
+    const standings = await db.getPairStandings(gameDayId)
+    
+    if (standings.length < 4) {
+      return res.status(400).json({
+        error: 'Need at least 4 pairs for semi-finals',
+        pairsCount: standings.length
+      })
+    }
+    
+    // Get pair data with members for creating matches
+    const pairs = await db.getTeamsByGameDay(gameDayId)
+    const pairDataMap = {}
+    for (const pair of pairs) {
+      const members = await db.getTeamMembers(pair.id)
+      pairDataMap[pair.id] = { pair, members }
+    }
+    
+    // Create semi-final matches
+    // SF1: 1st vs 4th, SF2: 2nd vs 3rd
+    const semiFinalMatchups = [
+      { teamA: standings[0], teamB: standings[3], name: 'Semi-Final 1' },
+      { teamA: standings[1], teamB: standings[2], name: 'Semi-Final 2' }
+    ]
+    
+    const scheduledMatches = []
+    
+    for (const matchup of semiFinalMatchups) {
+      const pairA = pairDataMap[matchup.teamA.teamId]
+      const pairB = pairDataMap[matchup.teamB.teamId]
+      
+      const matchId = `match-${uuidv4()}`
+      
+      console.log(`${matchup.name}: ${matchup.teamA.pairName} vs ${matchup.teamB.pairName}`)
+      
+      scheduledMatches.push({
+        id: matchId,
+        gameDayId,
+        round: -1, // Semi-finals
+        group: 1,
+        court: null,
+        teamA: {
+          players: [pairA.members[0].id, pairA.members[1].id],
+          score: null
+        },
+        teamB: {
+          players: [pairB.members[0].id, pairB.members[1].id],
+          score: null
+        },
+        teamATeamId: pairA.pair.id,
+        teamBTeamId: pairB.pair.id,
+        bye: null,
+        status: 'pending',
+        winner: null,
+        timestamp: null
+      })
+    }
+    
+    // Save matches to database
+    for (const match of scheduledMatches) {
+      await db.createMatch(match)
+    }
+    
+    console.log(`✅ Generated ${scheduledMatches.length} semi-final matches`)
+    
+    return res.json({
+      message: 'Semi-finals generated successfully',
+      matchesGenerated: scheduledMatches.length,
+      matches: semiFinalMatchups.map(m => ({
+        name: m.name,
+        teamA: m.teamA.pairName,
+        teamB: m.teamB.pairName
+      })),
+      success: true
+    })
+    
+  } catch (error) {
+    console.error('Error generating semi-finals:', error)
+    res.status(500).json({ error: 'Failed to generate semi-finals' })
+  }
+})
+
+// POST /api/gamedays/:id/generate-finals - Generate finals (after semi-finals complete)
+gameDayRoutes.post('/:id/generate-finals', async (req, res) => {
+  try {
+    const gameDayId = req.params.id
+    const gameDay = await db.getGameDayById(gameDayId)
+    
+    if (!gameDay) {
+      return res.status(404).json({ error: 'Game day not found' })
+    }
+    
+    if (gameDay.format !== 'pairs') {
+      return res.status(400).json({ error: 'Finals are only available for pairs mode' })
+    }
+    
+    // Check if semi-finals exist and are complete
+    const semiFinalStatus = await db.areMatchesComplete(gameDayId, -1)
+    if (semiFinalStatus.total === 0) {
+      return res.status(400).json({
+        error: 'Semi-finals must be generated first'
+      })
+    }
+    if (!semiFinalStatus.allComplete) {
+      return res.status(400).json({
+        error: 'Cannot generate finals: not all semi-final matches are complete',
+        completed: semiFinalStatus.completed,
+        total: semiFinalStatus.total
+      })
+    }
+    
+    // Check if finals already exist
+    const existingFinals = await db.getMatchesByRound(gameDayId, -2)
+    if (existingFinals.length > 0) {
+      return res.status(400).json({
+        error: 'Finals have already been generated',
+        existingMatches: existingFinals.length
+      })
+    }
+    
+    // Get semi-final results
+    const semiFinalMatches = await db.getMatchesByRound(gameDayId, -1)
+    
+    // Get pair data
+    const pairs = await db.getTeamsByGameDay(gameDayId)
+    const pairDataMap = {}
+    for (const pair of pairs) {
+      const members = await db.getTeamMembers(pair.id)
+      pairDataMap[pair.id] = { pair, members }
+    }
+    
+    // Determine winners and losers of semi-finals
+    const sf1 = semiFinalMatches[0]
+    const sf2 = semiFinalMatches[1]
+    
+    const sf1Winner = sf1.winner === 'teamA' ? sf1.teamATeamId : sf1.teamBTeamId
+    const sf1Loser = sf1.winner === 'teamA' ? sf1.teamBTeamId : sf1.teamATeamId
+    const sf2Winner = sf2.winner === 'teamA' ? sf2.teamATeamId : sf2.teamBTeamId
+    const sf2Loser = sf2.winner === 'teamA' ? sf2.teamBTeamId : sf2.teamATeamId
+    
+    // Get standings for placement matches (5th onwards)
+    const standings = await db.getPairStandings(gameDayId)
+    
+    // Create finals matches
+    const finalsMatchups = [
+      { teamAId: sf1Winner, teamBId: sf2Winner, name: 'Grand Final' },
+      { teamAId: sf1Loser, teamBId: sf2Loser, name: '3rd Place Playoff' }
+    ]
+    
+    // Add placement matches for remaining pairs (5th, 6th, 7th, 8th, etc.)
+    // Get pairs not in semi-finals (positions 5+)
+    const semiFinalPairIds = [sf1.teamATeamId, sf1.teamBTeamId, sf2.teamATeamId, sf2.teamBTeamId]
+    const remainingPairs = standings.filter(s => !semiFinalPairIds.includes(s.teamId))
+    
+    // Create placement matches: 5th vs 6th, 7th vs 8th, etc.
+    for (let i = 0; i < remainingPairs.length - 1; i += 2) {
+      const position = i + 5 // Starting from 5th place
+      finalsMatchups.push({
+        teamAId: remainingPairs[i].teamId,
+        teamBId: remainingPairs[i + 1].teamId,
+        name: `${position}th/${position + 1}th Place`
+      })
+    }
+    
+    // If odd number of remaining pairs, last one gets a bye (auto 2nd-to-last place)
+    // For now, we just don't create a match for them
+    
+    const scheduledMatches = []
+    
+    for (const matchup of finalsMatchups) {
+      const pairA = pairDataMap[matchup.teamAId]
+      const pairB = pairDataMap[matchup.teamBId]
+      
+      const matchId = `match-${uuidv4()}`
+      
+      console.log(`${matchup.name}: ${pairA.pair.team_name} vs ${pairB.pair.team_name}`)
+      
+      scheduledMatches.push({
+        id: matchId,
+        gameDayId,
+        round: -2, // Finals
+        group: 1,
+        court: null,
+        teamA: {
+          players: [pairA.members[0].id, pairA.members[1].id],
+          score: null
+        },
+        teamB: {
+          players: [pairB.members[0].id, pairB.members[1].id],
+          score: null
+        },
+        teamATeamId: pairA.pair.id,
+        teamBTeamId: pairB.pair.id,
+        bye: null,
+        status: 'pending',
+        winner: null,
+        timestamp: null
+      })
+    }
+    
+    // Save matches to database
+    for (const match of scheduledMatches) {
+      await db.createMatch(match)
+    }
+    
+    console.log(`✅ Generated ${scheduledMatches.length} finals matches`)
+    
+    return res.json({
+      message: 'Finals generated successfully',
+      matchesGenerated: scheduledMatches.length,
+      matches: finalsMatchups.map(m => ({
+        name: m.name,
+        teamA: pairDataMap[m.teamAId].pair.team_name,
+        teamB: pairDataMap[m.teamBId].pair.team_name
+      })),
+      success: true
+    })
+    
+  } catch (error) {
+    console.error('Error generating finals:', error)
+    res.status(500).json({ error: 'Failed to generate finals' })
+  }
+})
+

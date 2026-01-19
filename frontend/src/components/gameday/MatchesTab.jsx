@@ -153,14 +153,26 @@ export default function MatchesTab({ gameDayId, gameDay, isAdminMode = false }) 
   const isPairsMode = gameDay?.settings?.format === 'pairs'
   
   // Calculate number of rounds for teams/pairs mode from match data
-  const calculatedRounds = (isTeamsMode || isPairsMode) && matches.length > 0
-    ? Math.max(...matches.map(m => m.round))
+  const roundRobinMatches = matches.filter(m => m.round > 0)
+  const semiFinalMatches = matches.filter(m => m.round === -1)
+  const finalMatches = matches.filter(m => m.round === -2)
+  
+  const calculatedRounds = (isTeamsMode || isPairsMode) && roundRobinMatches.length > 0
+    ? Math.max(...roundRobinMatches.map(m => m.round))
     : 1
   
   // Generate round options for teams/pairs mode (calculated from actual matches)
   const calculatedRoundOptions = []
   for (let i = 1; i <= calculatedRounds; i++) {
     calculatedRoundOptions.push({ value: String(i), label: `Round ${i}` })
+  }
+  
+  // Add Semi-Finals and Finals options for pairs mode if they exist
+  if (isPairsMode && semiFinalMatches.length > 0) {
+    calculatedRoundOptions.push({ value: '-1', label: 'Semi-Finals' })
+  }
+  if (isPairsMode && finalMatches.length > 0) {
+    calculatedRoundOptions.push({ value: '-2', label: 'Finals' })
   }
   
   // Get matches for selected round (and group for group mode only)
@@ -518,7 +530,11 @@ export default function MatchesTab({ gameDayId, gameDay, isAdminMode = false }) 
         <div className="p-4">
           <h4 className="text-md font-semibold mb-3">
             {(isTeamsMode || isPairsMode)
-              ? `Round ${selectedRound} of ${calculatedRounds} (${filteredMatches.length} match${filteredMatches.length !== 1 ? 'es' : ''})` 
+              ? selectedRound === '-1'
+                ? `Semi-Finals (${filteredMatches.length} match${filteredMatches.length !== 1 ? 'es' : ''})`
+                : selectedRound === '-2'
+                  ? `Finals (${filteredMatches.length} match${filteredMatches.length !== 1 ? 'es' : ''})`
+                  : `Round ${selectedRound} of ${calculatedRounds} (${filteredMatches.length} match${filteredMatches.length !== 1 ? 'es' : ''})`
               : `Round ${selectedRound} - Group ${selectedGroup}`}
           </h4>
           
@@ -738,7 +754,11 @@ export default function MatchesTab({ gameDayId, gameDay, isAdminMode = false }) 
           <div className="space-y-4">
             <div className="text-sm text-gray-600 mb-4">
               {(isTeamsMode || isPairsMode) 
-                ? `Round ${selectedMatch.round}`
+                ? selectedMatch.round === -1
+                  ? 'Semi-Finals'
+                  : selectedMatch.round === -2
+                    ? 'Finals'
+                    : `Round ${selectedMatch.round}`
                 : `Round ${selectedMatch.round} - Group ${selectedMatch.group}`}
             </div>
             

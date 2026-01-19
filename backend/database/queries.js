@@ -910,3 +910,45 @@ export async function getUnpairedAthletes(gameDayId) {
   return result.rows
 }
 
+// ============= FINALS =============
+
+// Check if all matches for a specific round type are complete
+// roundFilter: positive numbers for round-robin, -1 for semi-finals, -2 for finals
+// If roundFilter is null, checks all round-robin matches (round > 0)
+export async function areMatchesComplete(gameDayId, roundFilter = null) {
+  let sql = `
+    SELECT COUNT(*) as total,
+           COUNT(*) FILTER (WHERE winner IS NOT NULL) as completed
+    FROM matches 
+    WHERE gameday_id = $1`
+  
+  const params = [gameDayId]
+  
+  if (roundFilter === null) {
+    // Check only round-robin matches (positive round numbers)
+    sql += ' AND round > 0'
+  } else {
+    // Check specific round
+    sql += ' AND round = $2'
+    params.push(roundFilter)
+  }
+  
+  const result = await query(sql, params)
+  const { total, completed } = result.rows[0]
+  
+  return {
+    total: parseInt(total),
+    completed: parseInt(completed),
+    allComplete: parseInt(total) > 0 && parseInt(total) === parseInt(completed)
+  }
+}
+
+// Get matches by round for a gameday
+export async function getMatchesByRound(gameDayId, round) {
+  const result = await query(
+    'SELECT * FROM matches WHERE gameday_id = $1 AND round = $2 ORDER BY id',
+    [gameDayId, round]
+  )
+  return result.rows.map(formatMatchFromDb)
+}
+

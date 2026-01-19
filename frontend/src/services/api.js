@@ -125,6 +125,20 @@ export const gameDayAPI = {
       : `/gamedays/${id}/leaderboard`
     return apiRequest(endpoint)
   },
+  
+  // Generate semi-finals for pairs mode
+  async generateSemiFinals(id) {
+    return apiRequest(`/gamedays/${id}/generate-semi-finals`, {
+      method: 'POST',
+    })
+  },
+  
+  // Generate finals for pairs mode (after semi-finals complete)
+  async generateFinals(id) {
+    return apiRequest(`/gamedays/${id}/generate-finals`, {
+      method: 'POST',
+    })
+  },
 }
 
 // Athlete APIs
