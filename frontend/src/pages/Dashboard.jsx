@@ -283,9 +283,11 @@ export default function Dashboard() {
                     <span className={`px-2 py-0.5 text-xs font-medium rounded whitespace-nowrap ${
                       gameDay.settings?.format === 'teams' 
                         ? 'bg-blue-100 text-blue-700' 
+                        : gameDay.settings?.format === 'pairs'
+                        ? 'bg-purple-100 text-purple-700'
                         : 'bg-gray-100 text-gray-600'
                     }`}>
-                      {gameDay.settings?.format === 'teams' ? 'Teams' : 'Groups'}
+                      {gameDay.settings?.format === 'teams' ? 'Teams' : gameDay.settings?.format === 'pairs' ? 'Pairs' : 'Groups'}
                     </span>
                   </div>
                 </div>
@@ -492,7 +494,8 @@ function CreateGameDayForm({ onClose, onSuccess }) {
       ...prev,
       format,
       // Set appropriate defaults based on format
-      pointsToWin: format === 'teams' ? 7 : 11
+      pointsToWin: format === 'teams' ? 7 : 11,
+      rounds: format === 'pairs' ? 1 : prev.rounds // Default to 1 iteration for pairs
     }))
     setStep(2)
   }
@@ -572,6 +575,25 @@ function CreateGameDayForm({ onClose, onSuccess }) {
               </svg>
             </div>
           </button>
+
+          {/* Pairs Format Card */}
+          <button
+            type="button"
+            onClick={() => handleFormatSelect('pairs')}
+            className="border-2 border-gray-200 hover:border-purple-500 p-4 text-left transition-all rounded-lg group"
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="font-semibold text-lg mb-1">Pairs</h4>
+                <p className="text-sm text-gray-600">
+                  Manual pairs compete in round-robin matches with leaderboard
+                </p>
+              </div>
+              <svg className="w-5 h-5 text-gray-400 group-hover:text-purple-500 flex-shrink-0 ml-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </div>
+          </button>
         </div>
 
         <div className="flex gap-2 pt-4">
@@ -600,8 +622,12 @@ function CreateGameDayForm({ onClose, onSuccess }) {
       <div className="bg-gray-50 p-3 rounded border border-gray-200 flex items-center justify-between">
         <div>
           <span className="text-sm font-medium">Format: </span>
-          <span className={`text-sm font-semibold ${formData.format === 'teams' ? 'text-blue-600' : 'text-[#377850]'}`}>
-            {formData.format === 'teams' ? 'Teams' : 'Groups'}
+          <span className={`text-sm font-semibold ${
+            formData.format === 'teams' ? 'text-blue-600' : 
+            formData.format === 'pairs' ? 'text-purple-600' : 
+            'text-[#377850]'
+          }`}>
+            {formData.format === 'teams' ? 'Teams' : formData.format === 'pairs' ? 'Pairs' : 'Groups'}
           </span>
         </div>
         <button
@@ -658,6 +684,27 @@ function CreateGameDayForm({ onClose, onSuccess }) {
           </select>
           <p className="text-xs text-gray-500 mt-1">
             Min 4 players per team, max 5 players per team
+          </p>
+        </div>
+      )}
+
+      {formData.format === 'pairs' && (
+        <div>
+          <label className="block text-sm font-medium mb-1">
+            Round-Robin Iterations
+          </label>
+          <select
+            name="rounds"
+            value={formData.rounds}
+            onChange={handleChange}
+            className="w-full border border-gray-200 px-3 py-2 text-sm"
+          >
+            <option value="1">1 (Each pair plays every other pair once)</option>
+            <option value="2">2 (Play through twice)</option>
+            <option value="3">3 (Play through three times)</option>
+          </select>
+          <p className="text-xs text-gray-500 mt-1">
+            Pairs are created manually. Each pair plays every other pair once per iteration.
           </p>
         </div>
       )}
