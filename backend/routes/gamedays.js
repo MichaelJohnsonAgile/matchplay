@@ -1466,8 +1466,7 @@ function findBestTeamMatch(teamData, teamPairs, playersInRound, playerGameCount,
 // ============= PAIRS MODE MATCH GENERATION =============
 
 // Generate matches for pairs mode using round-robin algorithm
-// Each pair plays every other pair once per iteration
-// Number of iterations (1, 2, or 3) is controlled by number_of_rounds setting
+// Each pair plays every other pair exactly once
 async function generatePairsMatches(gameDayId, gameDay, res) {
   try {
     console.log('Generating matches for PAIRS mode')
@@ -1480,6 +1479,18 @@ async function generatePairsMatches(gameDayId, gameDay, res) {
         error: 'Need at least 2 pairs to generate matches.',
         suggestion: 'Go to the Pairs tab and create more pairs.',
         currentCount: pairs.length
+      })
+    }
+    
+    // Check for unpaired athletes - all athletes must be in pairs before generating draw
+    const unpairedAthletes = await db.getUnpairedAthletes(gameDayId)
+    if (unpairedAthletes.length > 0) {
+      const unpairedNames = unpairedAthletes.map(a => a.name).join(', ')
+      return res.status(400).json({
+        error: `Cannot generate draw: ${unpairedAthletes.length} athlete(s) not yet assigned to pairs.`,
+        suggestion: `Please assign all athletes to pairs first. Unpaired: ${unpairedNames}`,
+        unpairedCount: unpairedAthletes.length,
+        unpairedAthletes: unpairedAthletes.map(a => ({ id: a.id, name: a.name }))
       })
     }
     
@@ -1508,101 +1519,81 @@ async function generatePairsMatches(gameDayId, gameDay, res) {
     }
     
     const numPairs = pairData.length
-    const iterations = gameDay.number_of_rounds || 1 // How many times to repeat the round-robin
     
-    // Generate round-robin schedule using circle method
-    // For n pairs: n-1 rounds per iteration (or n rounds if odd, with bye)
+    // Round-robin: n pairs = n-1 rounds (or n rounds if odd, with bye each round)
+    // Total matches = n * (n-1) / 2
     const hasOddPairs = numPairs % 2 === 1
-    const effectivePairs = hasOddPairs ? numPairs + 1 : numPairs // Add phantom pair for bye
-    const roundsPerIteration = effectivePairs - 1
-    const totalRounds = roundsPerIteration * iterations
+    const effectiveCount = hasOddPairs ? numPairs + 1 : numPairs
+    const numRounds = effectiveCount - 1
+    const matchesPerRound = effectiveCount / 2
     
-    console.log(`Generating ${totalRounds} rounds (${roundsPerIteration} per iteration x ${iterations} iterations)`)
-    console.log(`Odd pairs: ${hasOddPairs}, effective pairs: ${effectivePairs}`)
+    console.log(`Round-robin: ${numPairs} pairs, ${numRounds} rounds, ${matchesPerRound} matches per round`)
+    if (hasOddPairs) {
+      console.log(`Odd number of pairs - one bye per round`)
+    }
+    
+    // Create array for circle method rotation
+    // Index 0 stays fixed, others rotate
+    const circle = []
+    for (let i = 0; i < effectiveCount; i++) {
+      if (hasOddPairs && i === effectiveCount - 1) {
+        circle.push(null) // BYE slot
+      } else {
+        circle.push(pairData[i])
+      }
+    }
     
     const scheduledMatches = []
     let matchNumber = 0
     
-    // Circle method: Fix pair 0 in place, rotate others
-    // Create rotation array (indices into pairData, or -1 for bye)
-    const rotationArray = []
-    for (let i = 1; i < effectivePairs; i++) {
-      if (hasOddPairs && i === effectivePairs - 1) {
-        rotationArray.push(-1) // Bye position
-      } else {
-        rotationArray.push(i - 1) // Adjust for 0-indexed pairData (pair 0 is fixed)
-      }
-    }
-    
-    for (let iteration = 0; iteration < iterations; iteration++) {
-      // Reset rotation for each iteration
-      const rotation = [...rotationArray]
+    for (let round = 1; round <= numRounds; round++) {
+      console.log(`\nRound ${round}:`)
       
-      for (let roundInIteration = 0; roundInIteration < roundsPerIteration; roundInIteration++) {
-        const roundNumber = (iteration * roundsPerIteration) + roundInIteration + 1
-        console.log(`\nRound ${roundNumber} (Iteration ${iteration + 1}, Round ${roundInIteration + 1}):`)
+      // Generate matchups for this round
+      // Pair circle[0] with circle[n-1], circle[1] with circle[n-2], etc.
+      for (let i = 0; i < matchesPerRound; i++) {
+        const pairA = circle[i]
+        const pairB = circle[effectiveCount - 1 - i]
         
-        // Match pair 0 (fixed) with the first element of rotation
-        const matchups = []
-        
-        // Pair 0 vs rotation[0]
-        if (rotation[0] !== -1) {
-          matchups.push([0, rotation[0] + 1]) // +1 because pair 0 is at index 0
-        } else {
-          console.log(`  Pair ${pairData[0].pair.team_name} has bye`)
+        // Skip if either is a bye
+        if (pairA === null || pairB === null) {
+          const realPair = pairA || pairB
+          console.log(`  BYE: ${realPair.pair.team_name}`)
+          continue
         }
         
-        // Match remaining pairs in rotation (folding: i matches with n-1-i)
-        for (let i = 1; i <= Math.floor(rotation.length / 2); i++) {
-          const idx1 = rotation[i]
-          const idx2 = rotation[rotation.length - i]
-          
-          if (idx1 === -1) {
-            console.log(`  Pair ${pairData[idx2 + 1].pair.team_name} has bye`)
-          } else if (idx2 === -1) {
-            console.log(`  Pair ${pairData[idx1 + 1].pair.team_name} has bye`)
-          } else {
-            matchups.push([idx1 + 1, idx2 + 1]) // +1 because pair 0 is fixed
-          }
-        }
+        matchNumber++
+        const matchId = `match-${uuidv4()}`
         
-        // Create matches for this round
-        for (const [pairAIdx, pairBIdx] of matchups) {
-          const pairA = pairData[pairAIdx]
-          const pairB = pairData[pairBIdx]
-          
-          matchNumber++
-          const matchId = `match-${uuidv4()}`
-          
-          console.log(`  Match ${matchNumber}: ${pairA.pair.team_name} vs ${pairB.pair.team_name}`)
-          
-          scheduledMatches.push({
-            id: matchId,
-            gameDayId,
-            round: roundNumber,
-            group: 1, // All pairs in same group
-            court: null,
-            teamA: {
-              players: [pairA.members[0].id, pairA.members[1].id],
-              score: null
-            },
-            teamB: {
-              players: [pairB.members[0].id, pairB.members[1].id],
-              score: null
-            },
-            teamATeamId: pairA.pair.id,
-            teamBTeamId: pairB.pair.id,
-            bye: null,
-            status: 'pending',
-            winner: null,
-            timestamp: null
-          })
-        }
+        console.log(`  Match ${matchNumber}: ${pairA.pair.team_name} vs ${pairB.pair.team_name}`)
         
-        // Rotate: move first element to end
-        const first = rotation.shift()
-        rotation.push(first)
+        scheduledMatches.push({
+          id: matchId,
+          gameDayId,
+          round: round,
+          group: 1, // All pairs in same group
+          court: null,
+          teamA: {
+            players: [pairA.members[0].id, pairA.members[1].id],
+            score: null
+          },
+          teamB: {
+            players: [pairB.members[0].id, pairB.members[1].id],
+            score: null
+          },
+          teamATeamId: pairA.pair.id,
+          teamBTeamId: pairB.pair.id,
+          bye: null,
+          status: 'pending',
+          winner: null,
+          timestamp: null
+        })
       }
+      
+      // Rotate: keep circle[0] fixed, rotate the rest clockwise
+      // [0, 1, 2, 3, 4] -> [0, 4, 1, 2, 3]
+      const last = circle.pop()
+      circle.splice(1, 0, last)
     }
     
     // Save matches to database
@@ -1610,18 +1601,18 @@ async function generatePairsMatches(gameDayId, gameDay, res) {
       await db.createMatch(match)
     }
     
-    const matchesPerPair = totalRounds // Each pair plays once per round (or has bye)
+    const matchesPerPair = numPairs - 1 // Each pair plays every other pair once
     
-    console.log(`\n✅ Generated ${scheduledMatches.length} matches across ${totalRounds} rounds`)
+    console.log(`\n✅ Generated ${scheduledMatches.length} matches across ${numRounds} rounds`)
+    console.log(`Each pair plays ${matchesPerPair} matches`)
     
     return res.json({
-      message: 'Pairs matches generated successfully',
+      message: 'Pairs round-robin generated successfully',
       matchesGenerated: scheduledMatches.length,
-      rounds: totalRounds,
+      rounds: numRounds,
       pairs: numPairs,
+      matchesPerPair: matchesPerPair,
       format: 'pairs',
-      iterations: iterations,
-      matchesPerPair: hasOddPairs ? matchesPerPair - iterations : matchesPerPair, // Account for bye rounds
       success: true
     })
     

@@ -494,8 +494,7 @@ function CreateGameDayForm({ onClose, onSuccess }) {
       ...prev,
       format,
       // Set appropriate defaults based on format
-      pointsToWin: format === 'teams' ? 7 : 11,
-      rounds: format === 'pairs' ? 1 : prev.rounds // Default to 1 iteration for pairs
+      pointsToWin: format === 'teams' ? 7 : 11
     }))
     setStep(2)
   }
@@ -684,27 +683,6 @@ function CreateGameDayForm({ onClose, onSuccess }) {
           </select>
           <p className="text-xs text-gray-500 mt-1">
             Min 4 players per team, max 5 players per team
-          </p>
-        </div>
-      )}
-
-      {formData.format === 'pairs' && (
-        <div>
-          <label className="block text-sm font-medium mb-1">
-            Round-Robin Iterations
-          </label>
-          <select
-            name="rounds"
-            value={formData.rounds}
-            onChange={handleChange}
-            className="w-full border border-gray-200 px-3 py-2 text-sm"
-          >
-            <option value="1">1 (Each pair plays every other pair once)</option>
-            <option value="2">2 (Play through twice)</option>
-            <option value="3">3 (Play through three times)</option>
-          </select>
-          <p className="text-xs text-gray-500 mt-1">
-            Pairs are created manually. Each pair plays every other pair once per iteration.
           </p>
         </div>
       )}

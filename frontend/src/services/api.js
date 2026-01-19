@@ -317,5 +317,12 @@ export const teamsAPI = {
       method: 'DELETE',
     })
   },
+  
+  // Auto-allocate unpaired athletes to pairs (Pro-Am style)
+  async autoAllocatePairs(gameDayId) {
+    return apiRequest(`/gamedays/${gameDayId}/pairs/auto-allocate`, {
+      method: 'POST',
+    })
+  },
 }
 

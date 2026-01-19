@@ -58,6 +58,7 @@ export function TeamsTab({ gameDayId, settings, onUpdate, isAdminMode = false })
   const [selectedAthletes, setSelectedAthletes] = useState([]) // Array of 2 athlete IDs
   const [creatingPair, setCreatingPair] = useState(false)
   const [deletingPair, setDeletingPair] = useState(null)
+  const [autoAllocating, setAutoAllocating] = useState(false)
   
   const isPairsMode = settings?.format === 'pairs'
   
@@ -290,6 +291,24 @@ export function TeamsTab({ gameDayId, settings, onUpdate, isAdminMode = false })
     }
   }
   
+  async function handleAutoAllocate() {
+    setAutoAllocating(true)
+    setError(null)
+    
+    try {
+      const result = await teamsAPI.autoAllocatePairs(gameDayId)
+      if (result.oddAthlete) {
+        setError(`${result.pairsCreated} pairs created. Note: ${result.oddAthlete.name} remains unpaired (odd number of athletes).`)
+      }
+      await loadData()
+    } catch (err) {
+      console.error('Error auto-allocating pairs:', err)
+      setError(err.message || 'Failed to auto-allocate pairs')
+    } finally {
+      setAutoAllocating(false)
+    }
+  }
+  
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -321,11 +340,22 @@ export function TeamsTab({ gameDayId, settings, onUpdate, isAdminMode = false })
         </div>
         
         <div className="flex gap-2">
+          {/* PAIRS MODE: Auto Allocate button */}
+          {isPairsMode && isAdminMode && !hasMatches && availableAthletes.length >= 2 && (
+            <button
+              onClick={handleAutoAllocate}
+              disabled={autoAllocating}
+              className="bg-purple-600 text-white px-4 py-2 text-sm font-medium hover:bg-purple-700 disabled:bg-gray-400"
+            >
+              {autoAllocating ? 'Allocating...' : 'Auto Allocate (Pro-Am)'}
+            </button>
+          )}
+          
           {/* PAIRS MODE: Create Pair button */}
           {isPairsMode && isAdminMode && !hasMatches && availableAthletes.length >= 2 && (
             <button
               onClick={handleOpenCreatePairModal}
-              className="bg-purple-600 text-white px-4 py-2 text-sm font-medium hover:bg-purple-700"
+              className="border border-purple-600 text-purple-600 px-4 py-2 text-sm font-medium hover:bg-purple-50"
             >
               Create Pair
             </button>

@@ -378,3 +378,67 @@ teamsRoutes.delete('/:id/pairs/:pairId', async (req, res) => {
   }
 })
 
+// POST /api/gamedays/:id/pairs/auto-allocate - Auto-allocate unpaired athletes to pairs (Pro-Am style)
+// Pairs best ranked with worst ranked, 2nd best with 2nd worst, etc.
+teamsRoutes.post('/:id/pairs/auto-allocate', async (req, res) => {
+  try {
+    const gameDayId = req.params.id
+    
+    const gameDay = await db.getGameDayById(gameDayId)
+    if (!gameDay) {
+      return res.status(404).json({ error: 'Game day not found' })
+    }
+    
+    if (gameDay.format !== 'pairs') {
+      return res.status(400).json({ error: 'Game day must be in pairs format' })
+    }
+    
+    // Get unpaired athletes sorted by rank
+    const unpairedAthletes = await db.getUnpairedAthletes(gameDayId)
+    
+    if (unpairedAthletes.length < 2) {
+      return res.status(400).json({ 
+        error: 'Need at least 2 unpaired athletes to auto-allocate',
+        unpairedCount: unpairedAthletes.length
+      })
+    }
+    
+    // Sort by rank (lower rank number = better player)
+    unpairedAthletes.sort((a, b) => (a.rank || 999) - (b.rank || 999))
+    
+    // Pro-Am style pairing: pair best with worst
+    const createdPairs = []
+    const midPoint = Math.floor(unpairedAthletes.length / 2)
+    
+    for (let i = 0; i < midPoint; i++) {
+      const topPlayer = unpairedAthletes[i] // Best ranked
+      const bottomPlayer = unpairedAthletes[unpairedAthletes.length - 1 - i] // Worst ranked
+      
+      const pairNumber = await db.getNextPairNumber(gameDayId)
+      const pair = await db.createPair(gameDayId, topPlayer.id, bottomPlayer.id, pairNumber)
+      
+      createdPairs.push({
+        pairId: pair.id,
+        pairNumber: pair.team_number,
+        pairName: pair.team_name,
+        members: pair.members.map(m => ({ id: m.id, name: m.name, rank: m.rank }))
+      })
+    }
+    
+    // Handle odd athlete (will remain unpaired)
+    const oddAthlete = unpairedAthletes.length % 2 === 1 
+      ? unpairedAthletes[midPoint] 
+      : null
+    
+    res.status(201).json({
+      message: `Created ${createdPairs.length} pairs using Pro-Am allocation`,
+      pairsCreated: createdPairs.length,
+      pairs: createdPairs,
+      oddAthlete: oddAthlete ? { id: oddAthlete.id, name: oddAthlete.name } : null
+    })
+  } catch (error) {
+    console.error('Error auto-allocating pairs:', error)
+    res.status(500).json({ error: 'Failed to auto-allocate pairs' })
+  }
+})
+
