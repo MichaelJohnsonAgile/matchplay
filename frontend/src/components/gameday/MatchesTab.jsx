@@ -152,20 +152,20 @@ export default function MatchesTab({ gameDayId, gameDay, isAdminMode = false }) 
   const isTeamsMode = gameDay?.settings?.format === 'teams'
   const isPairsMode = gameDay?.settings?.format === 'pairs'
   
-  // Calculate number of rounds for teams mode from match data
-  const teamsRounds = isTeamsMode && matches.length > 0
+  // Calculate number of rounds for teams/pairs mode from match data
+  const calculatedRounds = (isTeamsMode || isPairsMode) && matches.length > 0
     ? Math.max(...matches.map(m => m.round))
     : 1
   
-  // Generate round options for teams mode
-  const teamsRoundOptions = []
-  for (let i = 1; i <= teamsRounds; i++) {
-    teamsRoundOptions.push({ value: String(i), label: `Round ${i}` })
+  // Generate round options for teams/pairs mode (calculated from actual matches)
+  const calculatedRoundOptions = []
+  for (let i = 1; i <= calculatedRounds; i++) {
+    calculatedRoundOptions.push({ value: String(i), label: `Round ${i}` })
   }
   
-  // Get matches for selected round (and group for non-teams mode)
-  const filteredMatches = isTeamsMode 
-    ? matches.filter(m => m.round === parseInt(selectedRound))  // Filter by round in teams mode
+  // Get matches for selected round (and group for group mode only)
+  const filteredMatches = (isTeamsMode || isPairsMode)
+    ? matches.filter(m => m.round === parseInt(selectedRound))  // Filter by round only in teams/pairs mode
     : matches.filter(m => 
         m.round === parseInt(selectedRound) && 
         m.group === parseInt(selectedGroup)
@@ -437,8 +437,8 @@ export default function MatchesTab({ gameDayId, gameDay, isAdminMode = false }) 
         
         {/* Round and Group Selectors */}
         <div className="flex items-center gap-3 flex-wrap">
-          {/* Group selector - only for non-teams mode */}
-          {!isTeamsMode && (
+          {/* Group selector - only for group mode (not teams or pairs) */}
+          {!isTeamsMode && !isPairsMode && (
             <select
               id="group-select"
               value={selectedGroup}
@@ -460,7 +460,7 @@ export default function MatchesTab({ gameDayId, gameDay, isAdminMode = false }) 
             onChange={(e) => setSelectedRound(e.target.value)}
             className="border border-gray-200 px-4 py-2 text-sm font-medium min-w-[120px]"
           >
-            {(isTeamsMode ? teamsRoundOptions : rounds).map((round) => (
+            {((isTeamsMode || isPairsMode) ? calculatedRoundOptions : rounds).map((round) => (
               <option key={round.value} value={round.value}>
                 {round.label}
               </option>
@@ -517,8 +517,8 @@ export default function MatchesTab({ gameDayId, gameDay, isAdminMode = false }) 
       <div className="space-y-6">
         <div className="p-4">
           <h4 className="text-md font-semibold mb-3">
-            {isTeamsMode 
-              ? `Round ${selectedRound} of ${teamsRounds} (${filteredMatches.length} match${filteredMatches.length !== 1 ? 'es' : ''})` 
+            {(isTeamsMode || isPairsMode)
+              ? `Round ${selectedRound} of ${calculatedRounds} (${filteredMatches.length} match${filteredMatches.length !== 1 ? 'es' : ''})` 
               : `Round ${selectedRound} - Group ${selectedGroup}`}
           </h4>
           
@@ -737,7 +737,9 @@ export default function MatchesTab({ gameDayId, gameDay, isAdminMode = false }) 
         {selectedMatch && (
           <div className="space-y-4">
             <div className="text-sm text-gray-600 mb-4">
-              Round {selectedMatch.round} - Group {selectedMatch.group}
+              {(isTeamsMode || isPairsMode) 
+                ? `Round ${selectedMatch.round}`
+                : `Round ${selectedMatch.round} - Group ${selectedMatch.group}`}
             </div>
             
             {/* Team A Score */}

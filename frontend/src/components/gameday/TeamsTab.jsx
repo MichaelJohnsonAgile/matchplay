@@ -319,118 +319,151 @@ export function TeamsTab({ gameDayId, settings, onUpdate, isAdminMode = false })
   
   return (
     <div className="space-y-8">
-      {/* Header with Actions */}
-      <div className="flex justify-between items-center">
-        <div>
+      {/* Header */}
+      <div>
+        <div className="flex justify-between items-start mb-4">
           <h2 className="text-2xl font-bold">{isPairsMode ? 'Pairs' : 'Teams'}</h2>
-          {teams.length > 0 && !hasMatches && (
-            <p className="text-sm text-gray-600 mt-1">
-              {isPairsMode 
-                ? `${teams.length} pair${teams.length !== 1 ? 's' : ''} created. Generate the draw for round-robin matches.`
-                : 'Teams are ready. Generate the draw to create matches.'}
-            </p>
-          )}
-          {teams.length > 0 && hasMatches && !hasScores && (
-            <p className="text-sm text-gray-600 mt-1">
-              {isPairsMode 
-                ? 'Draw generated. Clear the draw to modify pairs.'
-                : 'Draw generated. Clear the draw to modify teams.'}
-            </p>
+          
+          {/* TEAMS MODE: Buttons on the right of header */}
+          {!isPairsMode && (
+            <div className="flex gap-2 flex-wrap justify-end">
+              {/* Generate Teams button (when no teams exist) */}
+              {isAdminMode && teams.length === 0 && (
+                <button
+                  onClick={handleGenerateTeams}
+                  disabled={generating}
+                  className="bg-[#377850] text-white px-4 py-2 text-sm font-medium disabled:bg-gray-400"
+                >
+                  {generating ? 'Generating...' : 'Generate Teams'}
+                </button>
+              )}
+              
+              {/* Regenerate Teams, Swap Players, and Generate Draw buttons */}
+              {isAdminMode && teams.length > 0 && !hasMatches && (
+                <>
+                  <button
+                    onClick={handleGenerateTeams}
+                    disabled={generating || swapMode}
+                    className="border border-gray-200 px-4 py-2 text-sm font-medium hover:bg-gray-50 disabled:bg-gray-100 disabled:text-gray-400"
+                  >
+                    {generating ? 'Regenerating...' : 'Regenerate Teams'}
+                  </button>
+                  <button
+                    onClick={handleToggleSwapMode}
+                    disabled={swapping}
+                    className={`px-4 py-2 text-sm font-medium transition-colors ${
+                      swapMode 
+                        ? 'bg-amber-500 text-white hover:bg-amber-600' 
+                        : 'border border-amber-500 text-amber-600 hover:bg-amber-50'
+                    }`}
+                  >
+                    {swapMode ? 'Exit Swap Mode' : 'Swap Players'}
+                  </button>
+                  <button
+                    onClick={handleGenerateDraw}
+                    disabled={generatingDraw || swapMode}
+                    className="bg-[#377850] text-white px-4 py-2 text-sm font-medium disabled:bg-gray-400"
+                  >
+                    {generatingDraw ? 'Generating...' : 'Generate Draw'}
+                  </button>
+                </>
+              )}
+              
+              {/* Clear Draw button (when matches exist) */}
+              {isAdminMode && teams.length > 0 && hasMatches && (
+                <button
+                  onClick={handleClearDraw}
+                  disabled={clearingDraw}
+                  className={`px-4 py-2 text-sm font-medium transition-colors ${
+                    hasScores
+                      ? 'bg-red-600 text-white hover:bg-red-700 disabled:bg-gray-400'
+                      : 'border border-red-500 text-red-600 hover:bg-red-50 disabled:border-gray-300 disabled:text-gray-400'
+                  }`}
+                >
+                  {clearingDraw ? 'Clearing...' : 'Clear Draw'}
+                </button>
+              )}
+              
+              {/* Refresh button */}
+              {teams.length > 0 && hasMatches && (
+                <button
+                  onClick={loadData}
+                  className="border border-gray-200 px-4 py-2 text-sm font-medium hover:bg-gray-50"
+                >
+                  <svg className="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  Refresh
+                </button>
+              )}
+            </div>
           )}
         </div>
         
-        <div className="flex gap-2">
-          {/* PAIRS MODE: Auto Allocate button */}
-          {isPairsMode && isAdminMode && !hasMatches && availableAthletes.length >= 2 && (
-            <button
-              onClick={handleAutoAllocate}
-              disabled={autoAllocating}
-              className="bg-purple-600 text-white px-4 py-2 text-sm font-medium hover:bg-purple-700 disabled:bg-gray-400"
-            >
-              {autoAllocating ? 'Allocating...' : 'Auto Allocate (Pro-Am)'}
-            </button>
-          )}
-          
-          {/* PAIRS MODE: Create Pair button */}
-          {isPairsMode && isAdminMode && !hasMatches && availableAthletes.length >= 2 && (
-            <button
-              onClick={handleOpenCreatePairModal}
-              className="border border-purple-600 text-purple-600 px-4 py-2 text-sm font-medium hover:bg-purple-50"
-            >
-              Create Pair
-            </button>
-          )}
-          
-          {/* PAIRS MODE: Generate Draw when pairs exist */}
-          {isPairsMode && isAdminMode && teams.length >= 2 && !hasMatches && (
-            <button
-              onClick={handleGenerateDraw}
-              disabled={generatingDraw}
-              className="bg-[#377850] text-white px-4 py-2 text-sm font-medium disabled:bg-gray-400"
-            >
-              {generatingDraw ? 'Generating...' : 'Generate Draw'}
-            </button>
-          )}
-          
-          {/* TEAMS MODE: Generate Teams button (when no teams exist) */}
-          {!isPairsMode && isAdminMode && teams.length === 0 && (
-            <button
-              onClick={handleGenerateTeams}
-              disabled={generating}
-              className="bg-[#377850] text-white px-4 py-2 text-sm font-medium disabled:bg-gray-400"
-            >
-              {generating ? 'Generating...' : 'Generate Teams'}
-            </button>
-          )}
-          
-          {/* TEAMS MODE: Regenerate Teams, Swap Players, and Generate Draw buttons */}
-          {!isPairsMode && isAdminMode && teams.length > 0 && !hasMatches && (
-            <>
-              <button
-                onClick={handleGenerateTeams}
-                disabled={generating || swapMode}
-                className="border border-gray-200 px-4 py-2 text-sm font-medium hover:bg-gray-50 disabled:bg-gray-100 disabled:text-gray-400"
-              >
-                {generating ? 'Regenerating...' : 'Regenerate Teams'}
-              </button>
-              <button
-                onClick={handleToggleSwapMode}
-                disabled={swapping}
-                className={`px-4 py-2 text-sm font-medium transition-colors ${
-                  swapMode 
-                    ? 'bg-amber-500 text-white hover:bg-amber-600' 
-                    : 'border border-amber-500 text-amber-600 hover:bg-amber-50'
-                }`}
-              >
-                {swapMode ? 'Exit Swap Mode' : 'Swap Players'}
-              </button>
+        {/* Status text */}
+        {teams.length > 0 && !hasMatches && (
+          <p className="text-sm text-gray-600">
+            {isPairsMode 
+              ? `${teams.length} pair${teams.length !== 1 ? 's' : ''} created. Generate the draw for round-robin matches.`
+              : 'Teams are ready. Generate the draw to create matches.'}
+          </p>
+        )}
+        {teams.length > 0 && hasMatches && !hasScores && (
+          <p className="text-sm text-gray-600">
+            {isPairsMode 
+              ? 'Draw generated. Clear the draw to modify pairs.'
+              : 'Draw generated. Clear the draw to modify teams.'}
+          </p>
+        )}
+        
+        {/* PAIRS MODE: Action buttons below header */}
+        {isPairsMode && isAdminMode && !hasMatches && (
+          <div className="flex gap-2 flex-wrap mt-4">
+            {availableAthletes.length >= 2 && (
+              <>
+                <button
+                  onClick={handleAutoAllocate}
+                  disabled={autoAllocating}
+                  className="bg-purple-600 text-white px-4 py-2 text-sm font-medium hover:bg-purple-700 disabled:bg-gray-400"
+                >
+                  {autoAllocating ? 'Allocating...' : 'Auto Allocate (Pro-Am)'}
+                </button>
+                <button
+                  onClick={handleOpenCreatePairModal}
+                  className="border border-purple-600 text-purple-600 px-4 py-2 text-sm font-medium hover:bg-purple-50"
+                >
+                  Create Pair
+                </button>
+              </>
+            )}
+            {teams.length >= 2 && (
               <button
                 onClick={handleGenerateDraw}
-                disabled={generatingDraw || swapMode}
+                disabled={generatingDraw}
                 className="bg-[#377850] text-white px-4 py-2 text-sm font-medium disabled:bg-gray-400"
               >
                 {generatingDraw ? 'Generating...' : 'Generate Draw'}
               </button>
-            </>
-          )}
-          
-          {/* Admin-only: Clear Draw button (when matches exist) */}
-          {isAdminMode && teams.length > 0 && hasMatches && (
-            <button
-              onClick={handleClearDraw}
-              disabled={clearingDraw}
-              className={`px-4 py-2 text-sm font-medium transition-colors ${
-                hasScores
-                  ? 'bg-red-600 text-white hover:bg-red-700 disabled:bg-gray-400'
-                  : 'border border-red-500 text-red-600 hover:bg-red-50 disabled:border-gray-300 disabled:text-gray-400'
-              }`}
-            >
-              {clearingDraw ? 'Clearing...' : 'Clear Draw'}
-            </button>
-          )}
-          
-          {/* Refresh button - available to everyone */}
-          {teams.length > 0 && hasMatches && (
+            )}
+          </div>
+        )}
+        
+        {/* PAIRS MODE: Clear Draw and Refresh when matches exist */}
+        {isPairsMode && hasMatches && (
+          <div className="flex gap-2 flex-wrap mt-4">
+            {isAdminMode && (
+              <button
+                onClick={handleClearDraw}
+                disabled={clearingDraw}
+                className={`px-4 py-2 text-sm font-medium transition-colors ${
+                  hasScores
+                    ? 'bg-red-600 text-white hover:bg-red-700 disabled:bg-gray-400'
+                    : 'border border-red-500 text-red-600 hover:bg-red-50 disabled:border-gray-300 disabled:text-gray-400'
+                }`}
+              >
+                {clearingDraw ? 'Clearing...' : 'Clear Draw'}
+              </button>
+            )}
             <button
               onClick={loadData}
               className="border border-gray-200 px-4 py-2 text-sm font-medium hover:bg-gray-50"
@@ -440,8 +473,8 @@ export function TeamsTab({ gameDayId, settings, onUpdate, isAdminMode = false })
               </svg>
               Refresh
             </button>
-          )}
-        </div>
+          </div>
+        )}
       </div>
       
       {error && (
