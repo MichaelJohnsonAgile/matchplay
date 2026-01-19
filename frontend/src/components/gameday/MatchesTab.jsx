@@ -148,8 +148,9 @@ export default function MatchesTab({ gameDayId, gameDay, isAdminMode = false }) 
     groupOptions.push({ value: String(i), label: `Group ${i}` })
   }
   
-  // Check if teams mode
+  // Check if teams or pairs mode
   const isTeamsMode = gameDay?.settings?.format === 'teams'
+  const isPairsMode = gameDay?.settings?.format === 'pairs'
   
   // Calculate number of rounds for teams mode from match data
   const teamsRounds = isTeamsMode && matches.length > 0
@@ -534,8 +535,8 @@ export default function MatchesTab({ gameDayId, gameDay, isAdminMode = false }) 
             </div>
           ) : (
             <>
-              {/* Group Leaderboard - only for group mode */}
-              {groupLeaderboard.length > 0 && !isTeamsMode && (
+              {/* Group Leaderboard - only for group mode (not teams or pairs) */}
+              {groupLeaderboard.length > 0 && !isTeamsMode && !isPairsMode && (
                 <div className="mb-6 overflow-x-auto">
                   <h5 className="text-sm font-semibold mb-2">Group Standings</h5>
                   <table className="w-full border-collapse text-sm">
