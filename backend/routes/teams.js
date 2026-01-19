@@ -14,6 +14,10 @@ teamsRoutes.post('/:id/teams/generate', async (req, res) => {
       return res.status(404).json({ error: 'Game day not found' })
     }
     
+    if (gameDay.format === 'pairs') {
+      return res.status(400).json({ error: 'Pairs mode requires manual pair creation. Use POST /api/gamedays/:id/pairs instead.' })
+    }
+    
     if (gameDay.format !== 'teams') {
       return res.status(400).json({ error: 'Game day must be in teams format' })
     }
@@ -246,6 +250,131 @@ teamsRoutes.delete('/:teamId', async (req, res) => {
   } catch (error) {
     console.error('Error deleting team:', error)
     res.status(500).json({ error: 'Failed to delete team' })
+  }
+})
+
+// ============= PAIRS MODE ENDPOINTS =============
+
+// POST /api/gamedays/:id/pairs - Create a new pair (pairs mode only)
+teamsRoutes.post('/:id/pairs', async (req, res) => {
+  try {
+    const gameDayId = req.params.id
+    const { athlete1Id, athlete2Id } = req.body
+    
+    const gameDay = await db.getGameDayById(gameDayId)
+    if (!gameDay) {
+      return res.status(404).json({ error: 'Game day not found' })
+    }
+    
+    if (gameDay.format !== 'pairs') {
+      return res.status(400).json({ error: 'This endpoint is only for pairs format game days' })
+    }
+    
+    if (!athlete1Id || !athlete2Id) {
+      return res.status(400).json({ error: 'Both athlete1Id and athlete2Id are required' })
+    }
+    
+    if (athlete1Id === athlete2Id) {
+      return res.status(400).json({ error: 'Cannot pair an athlete with themselves' })
+    }
+    
+    // Check athletes are in this game day
+    const gameDayAthletes = await db.getGameDayAthletes(gameDayId)
+    const athleteIds = gameDayAthletes.map(a => a.id)
+    
+    if (!athleteIds.includes(athlete1Id) || !athleteIds.includes(athlete2Id)) {
+      return res.status(400).json({ error: 'Both athletes must be added to this game day first' })
+    }
+    
+    // Check athletes aren't already in a pair
+    const unpairedAthletes = await db.getUnpairedAthletes(gameDayId)
+    const unpairedIds = unpairedAthletes.map(a => a.id)
+    
+    if (!unpairedIds.includes(athlete1Id)) {
+      return res.status(400).json({ error: 'Athlete 1 is already in a pair' })
+    }
+    if (!unpairedIds.includes(athlete2Id)) {
+      return res.status(400).json({ error: 'Athlete 2 is already in a pair' })
+    }
+    
+    // Get next pair number
+    const pairNumber = await db.getNextPairNumber(gameDayId)
+    
+    // Create the pair
+    const pair = await db.createPair(gameDayId, athlete1Id, athlete2Id, pairNumber)
+    
+    res.status(201).json({
+      message: 'Pair created successfully',
+      pair: {
+        pairId: pair.id,
+        pairNumber: pair.team_number,
+        pairName: pair.team_name,
+        members: pair.members.map(m => ({ id: m.id, name: m.name, rank: m.rank }))
+      }
+    })
+  } catch (error) {
+    console.error('Error creating pair:', error)
+    res.status(500).json({ error: 'Failed to create pair' })
+  }
+})
+
+// GET /api/gamedays/:id/pairs/standings - Get pair standings (leaderboard)
+teamsRoutes.get('/:id/pairs/standings', async (req, res) => {
+  try {
+    const gameDay = await db.getGameDayById(req.params.id)
+    if (!gameDay) {
+      return res.status(404).json({ error: 'Game day not found' })
+    }
+    
+    const standings = await db.getPairStandings(req.params.id)
+    res.json(standings)
+  } catch (error) {
+    console.error('Error getting pair standings:', error)
+    res.status(500).json({ error: 'Failed to fetch pair standings' })
+  }
+})
+
+// GET /api/gamedays/:id/pairs/available - Get athletes not yet in a pair
+teamsRoutes.get('/:id/pairs/available', async (req, res) => {
+  try {
+    const gameDay = await db.getGameDayById(req.params.id)
+    if (!gameDay) {
+      return res.status(404).json({ error: 'Game day not found' })
+    }
+    
+    const unpairedAthletes = await db.getUnpairedAthletes(req.params.id)
+    res.json(unpairedAthletes)
+  } catch (error) {
+    console.error('Error getting unpaired athletes:', error)
+    res.status(500).json({ error: 'Failed to fetch unpaired athletes' })
+  }
+})
+
+// DELETE /api/gamedays/:id/pairs/:pairId - Delete a pair
+teamsRoutes.delete('/:id/pairs/:pairId', async (req, res) => {
+  try {
+    const { id: gameDayId, pairId } = req.params
+    
+    const gameDay = await db.getGameDayById(gameDayId)
+    if (!gameDay) {
+      return res.status(404).json({ error: 'Game day not found' })
+    }
+    
+    // Verify the pair belongs to this game day
+    const pair = await db.getTeamById(pairId)
+    if (!pair || pair.gameday_id !== gameDayId) {
+      return res.status(404).json({ error: 'Pair not found in this game day' })
+    }
+    
+    const deleted = await db.deleteTeam(pairId)
+    if (!deleted) {
+      return res.status(404).json({ error: 'Pair not found' })
+    }
+    
+    res.status(204).send()
+  } catch (error) {
+    console.error('Error deleting pair:', error)
+    res.status(500).json({ error: 'Failed to delete pair' })
   }
 })
 

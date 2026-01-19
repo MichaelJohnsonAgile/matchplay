@@ -151,6 +151,7 @@ export default function GameDay() {
 
   const hasMatches = gameDay.matchCount > 0
   const isTeamsMode = gameDay.settings.format === 'teams'
+  const isPairsMode = gameDay.settings.format === 'pairs'
   
   // Build tabs dynamically based on game mode
   const tabs = [
@@ -161,10 +162,10 @@ export default function GameDay() {
     }
   ]
   
-  // Add Teams tab for teams mode (combines teams + leaderboard)
-  if (isTeamsMode) {
+  // Add Teams/Pairs tab for teams or pairs mode (combines teams/pairs + leaderboard)
+  if (isTeamsMode || isPairsMode) {
     tabs.push({
-      label: 'Teams',
+      label: isPairsMode ? 'Pairs' : 'Teams',
       content: <TeamsTab gameDayId={id} settings={gameDay.settings} onUpdate={loadGameDay} isAdminMode={isAdminMode} />,
       disabled: false
     })
@@ -192,9 +193,11 @@ export default function GameDay() {
           <span className={`px-2 py-0.5 text-xs font-medium rounded ${
             isTeamsMode 
               ? 'bg-blue-100 text-blue-800' 
+              : isPairsMode
+              ? 'bg-purple-100 text-purple-800'
               : 'bg-gray-100 text-gray-700'
           }`}>
-            {isTeamsMode ? 'Teams' : 'Groups'}
+            {isTeamsMode ? 'Teams' : isPairsMode ? 'Pairs' : 'Groups'}
           </span>
         </div>
         <div className="flex gap-2 mt-3">

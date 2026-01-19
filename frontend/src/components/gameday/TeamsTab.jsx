@@ -52,6 +52,15 @@ export function TeamsTab({ gameDayId, settings, onUpdate, isAdminMode = false })
   const [swapping, setSwapping] = useState(false)
   const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: '', message: '', onConfirm: null })
   
+  // Pairs mode specific state
+  const [showCreatePairModal, setShowCreatePairModal] = useState(false)
+  const [availableAthletes, setAvailableAthletes] = useState([])
+  const [selectedAthletes, setSelectedAthletes] = useState([]) // Array of 2 athlete IDs
+  const [creatingPair, setCreatingPair] = useState(false)
+  const [deletingPair, setDeletingPair] = useState(null)
+  
+  const isPairsMode = settings?.format === 'pairs'
+  
   useEffect(() => {
     loadData()
   }, [gameDayId])
@@ -68,16 +77,24 @@ export function TeamsTab({ gameDayId, settings, onUpdate, isAdminMode = false })
       setHasMatches(matchesData.length > 0)
       setHasScores(matchesData.some(m => m.teamA?.score !== null || m.teamB?.score !== null))
       
-      // Load standings if matches exist
+      // Load standings if matches exist (use pairs endpoint for pairs mode)
       if (matchesData.length > 0) {
-        const standingsData = await teamsAPI.getStandings(gameDayId)
+        const standingsData = isPairsMode 
+          ? await teamsAPI.getPairStandings(gameDayId)
+          : await teamsAPI.getStandings(gameDayId)
         setStandings(standingsData)
+      }
+      
+      // Load available athletes for pairs mode
+      if (isPairsMode) {
+        const available = await teamsAPI.getAvailableAthletes(gameDayId)
+        setAvailableAthletes(available)
       }
       
       setError(null)
     } catch (err) {
       console.error('Error loading data:', err)
-      setError('Failed to load teams')
+      setError(isPairsMode ? 'Failed to load pairs' : 'Failed to load teams')
     } finally {
       setLoading(false)
     }
@@ -216,6 +233,63 @@ export function TeamsTab({ gameDayId, settings, onUpdate, isAdminMode = false })
     }
   }
   
+  // ============= PAIRS MODE FUNCTIONS =============
+  
+  function handleOpenCreatePairModal() {
+    setSelectedAthletes([])
+    setShowCreatePairModal(true)
+  }
+  
+  function handleAthleteSelect(athleteId) {
+    setSelectedAthletes(prev => {
+      if (prev.includes(athleteId)) {
+        // Deselect
+        return prev.filter(id => id !== athleteId)
+      } else if (prev.length < 2) {
+        // Select (max 2)
+        return [...prev, athleteId]
+      }
+      return prev
+    })
+  }
+  
+  async function handleCreatePair() {
+    if (selectedAthletes.length !== 2) {
+      setError('Please select exactly 2 athletes')
+      return
+    }
+    
+    setCreatingPair(true)
+    setError(null)
+    
+    try {
+      await teamsAPI.createPair(gameDayId, selectedAthletes[0], selectedAthletes[1])
+      setShowCreatePairModal(false)
+      setSelectedAthletes([])
+      await loadData()
+    } catch (err) {
+      console.error('Error creating pair:', err)
+      setError(err.message || 'Failed to create pair')
+    } finally {
+      setCreatingPair(false)
+    }
+  }
+  
+  async function handleDeletePair(pairId) {
+    setDeletingPair(pairId)
+    setError(null)
+    
+    try {
+      await teamsAPI.deletePair(gameDayId, pairId)
+      await loadData()
+    } catch (err) {
+      console.error('Error deleting pair:', err)
+      setError(err.message || 'Failed to delete pair')
+    } finally {
+      setDeletingPair(null)
+    }
+  }
+  
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -229,18 +303,47 @@ export function TeamsTab({ gameDayId, settings, onUpdate, isAdminMode = false })
       {/* Header with Actions */}
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-2xl font-bold">Teams</h2>
+          <h2 className="text-2xl font-bold">{isPairsMode ? 'Pairs' : 'Teams'}</h2>
           {teams.length > 0 && !hasMatches && (
-            <p className="text-sm text-gray-600 mt-1">Teams are ready. Generate the draw to create matches.</p>
+            <p className="text-sm text-gray-600 mt-1">
+              {isPairsMode 
+                ? `${teams.length} pair${teams.length !== 1 ? 's' : ''} created. Generate the draw for round-robin matches.`
+                : 'Teams are ready. Generate the draw to create matches.'}
+            </p>
           )}
           {teams.length > 0 && hasMatches && !hasScores && (
-            <p className="text-sm text-gray-600 mt-1">Draw generated. Clear the draw to modify teams.</p>
+            <p className="text-sm text-gray-600 mt-1">
+              {isPairsMode 
+                ? 'Draw generated. Clear the draw to modify pairs.'
+                : 'Draw generated. Clear the draw to modify teams.'}
+            </p>
           )}
         </div>
         
         <div className="flex gap-2">
-          {/* Admin-only: Generate Teams button (when no teams exist) */}
-          {isAdminMode && teams.length === 0 && (
+          {/* PAIRS MODE: Create Pair button */}
+          {isPairsMode && isAdminMode && !hasMatches && availableAthletes.length >= 2 && (
+            <button
+              onClick={handleOpenCreatePairModal}
+              className="bg-purple-600 text-white px-4 py-2 text-sm font-medium hover:bg-purple-700"
+            >
+              Create Pair
+            </button>
+          )}
+          
+          {/* PAIRS MODE: Generate Draw when pairs exist */}
+          {isPairsMode && isAdminMode && teams.length >= 2 && !hasMatches && (
+            <button
+              onClick={handleGenerateDraw}
+              disabled={generatingDraw}
+              className="bg-[#377850] text-white px-4 py-2 text-sm font-medium disabled:bg-gray-400"
+            >
+              {generatingDraw ? 'Generating...' : 'Generate Draw'}
+            </button>
+          )}
+          
+          {/* TEAMS MODE: Generate Teams button (when no teams exist) */}
+          {!isPairsMode && isAdminMode && teams.length === 0 && (
             <button
               onClick={handleGenerateTeams}
               disabled={generating}
@@ -250,8 +353,8 @@ export function TeamsTab({ gameDayId, settings, onUpdate, isAdminMode = false })
             </button>
           )}
           
-          {/* Admin-only: Regenerate Teams, Swap Players, and Generate Draw buttons */}
-          {isAdminMode && teams.length > 0 && !hasMatches && (
+          {/* TEAMS MODE: Regenerate Teams, Swap Players, and Generate Draw buttons */}
+          {!isPairsMode && isAdminMode && teams.length > 0 && !hasMatches && (
             <>
               <button
                 onClick={handleGenerateTeams}
@@ -356,18 +459,91 @@ export function TeamsTab({ gameDayId, settings, onUpdate, isAdminMode = false })
       )}
       
       {teams.length === 0 && !error && (
-        <div className="border border-blue-500 bg-blue-50 p-4 text-blue-800 rounded">
-          <p className="font-semibold mb-2">{isAdminMode ? 'Get Started' : 'Teams Not Generated'}</p>
-          <p>
+        <div className={`border p-4 rounded ${isPairsMode ? 'border-purple-500 bg-purple-50 text-purple-800' : 'border-blue-500 bg-blue-50 text-blue-800'}`}>
+          <p className="font-semibold mb-2">
             {isAdminMode 
-              ? 'Add athletes first, then generate teams. Teams will be balanced using a serpentine draft based on player rankings.'
-              : 'Teams have not been generated yet. Please wait for the admin to set up teams.'}
+              ? 'Get Started' 
+              : isPairsMode ? 'Pairs Not Created' : 'Teams Not Generated'}
           </p>
+          <p>
+            {isPairsMode
+              ? (isAdminMode 
+                  ? 'Add athletes first, then create pairs manually. Each pair must have exactly 2 players.'
+                  : 'Pairs have not been created yet. Please wait for the admin to set up pairs.')
+              : (isAdminMode 
+                  ? 'Add athletes first, then generate teams. Teams will be balanced using a serpentine draft based on player rankings.'
+                  : 'Teams have not been generated yet. Please wait for the admin to set up teams.')}
+          </p>
+          {isPairsMode && availableAthletes.length > 0 && availableAthletes.length < 2 && (
+            <p className="mt-2 text-sm">
+              Need at least 2 available athletes to create a pair. Currently have {availableAthletes.length}.
+            </p>
+          )}
         </div>
       )}
       
-      {/* Teams Display */}
-      {teams.length > 0 && !hasMatches && (
+      {/* Pairs Display */}
+      {isPairsMode && teams.length > 0 && !hasMatches && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {teams.map((pair) => (
+            <div key={pair.teamId} className="border-2 border-purple-200 rounded-lg overflow-hidden bg-white">
+              {/* Pair Header */}
+              <div className="bg-purple-500 text-white p-3">
+                <div className="flex justify-between items-center">
+                  <h3 className="font-bold">{pair.teamName}</h3>
+                  {isAdminMode && (
+                    <button
+                      onClick={() => handleDeletePair(pair.teamId)}
+                      disabled={deletingPair === pair.teamId}
+                      className="text-white/70 hover:text-white p-1"
+                      title="Delete pair"
+                    >
+                      {deletingPair === pair.teamId ? (
+                        <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                      ) : (
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      )}
+                    </button>
+                  )}
+                </div>
+              </div>
+              
+              {/* Pair Members */}
+              <div className="p-3 space-y-2">
+                {pair.members.map((member) => (
+                  <div key={member.id} className="flex justify-between items-center p-2 bg-gray-50 rounded">
+                    <span className="font-medium">{member.name}</span>
+                    <span className="text-xs text-gray-500">Rank {member.rank}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+          
+          {/* Available Athletes Info */}
+          {availableAthletes.length > 0 && (
+            <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 flex flex-col items-center justify-center text-gray-500">
+              <p className="text-sm mb-2">{availableAthletes.length} athlete{availableAthletes.length !== 1 ? 's' : ''} available</p>
+              {isAdminMode && availableAthletes.length >= 2 && (
+                <button
+                  onClick={handleOpenCreatePairModal}
+                  className="text-purple-600 hover:text-purple-700 text-sm font-medium"
+                >
+                  + Create another pair
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Teams Display (Teams Mode Only) */}
+      {!isPairsMode && teams.length > 0 && !hasMatches && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {teams.map((team) => {
             const colorScheme = TEAM_COLORS[team.teamColor] || TEAM_COLORS.blue
@@ -461,8 +637,57 @@ export function TeamsTab({ gameDayId, settings, onUpdate, isAdminMode = false })
         </div>
       )}
       
-      {/* Leaderboard View (when matches exist) */}
-      {teams.length > 0 && hasMatches && standings.length > 0 && (
+      {/* Pairs Leaderboard View (when matches exist) */}
+      {isPairsMode && teams.length > 0 && hasMatches && standings.length > 0 && (
+        <div className="space-y-6">
+          <h3 className="text-xl font-bold">Pair Standings</h3>
+          
+          <div className="border border-gray-200 rounded-lg overflow-hidden">
+            <table className="w-full text-sm">
+              <thead className="bg-purple-50 border-b border-gray-200">
+                <tr>
+                  <th className="text-left p-3 font-semibold">#</th>
+                  <th className="text-left p-3 font-semibold">Pair</th>
+                  <th className="text-center p-3 font-semibold">Played</th>
+                  <th className="text-center p-3 font-semibold">W</th>
+                  <th className="text-center p-3 font-semibold">L</th>
+                  <th className="text-center p-3 font-semibold">PF</th>
+                  <th className="text-center p-3 font-semibold">PA</th>
+                  <th className="text-center p-3 font-semibold">+/-</th>
+                </tr>
+              </thead>
+              <tbody>
+                {standings.map((pair, index) => (
+                  <tr key={pair.pairId || pair.teamId} className="border-b border-gray-100 last:border-b-0 hover:bg-gray-50">
+                    <td className="p-3 font-bold text-purple-600">{index + 1}</td>
+                    <td className="p-3">
+                      <div className="font-medium">{pair.pairName || pair.teamName}</div>
+                      <div className="text-xs text-gray-500">
+                        {pair.members?.map(m => m.name).join(' & ')}
+                      </div>
+                    </td>
+                    <td className="p-3 text-center">{pair.matchesPlayed}</td>
+                    <td className="p-3 text-center font-medium text-green-600">{pair.wins}</td>
+                    <td className="p-3 text-center font-medium text-red-600">{pair.losses}</td>
+                    <td className="p-3 text-center">{pair.pointsFor}</td>
+                    <td className="p-3 text-center">{pair.pointsAgainst}</td>
+                    <td className={`p-3 text-center font-bold ${
+                      pair.pointDiff > 0 ? 'text-green-600' : 
+                      pair.pointDiff < 0 ? 'text-red-600' : 
+                      'text-gray-600'
+                    }`}>
+                      {pair.pointDiff > 0 ? '+' : ''}{pair.pointDiff}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Teams Leaderboard View (when matches exist) */}
+      {!isPairsMode && teams.length > 0 && hasMatches && standings.length > 0 && (
         <div className="space-y-6">
           <h3 className="text-xl font-bold">Team Standings</h3>
           
@@ -594,6 +819,80 @@ export function TeamsTab({ gameDayId, settings, onUpdate, isAdminMode = false })
         confirmText={hasScores ? 'Yes, Delete All Matches' : 'Clear Draw'}
         confirmColor={hasScores ? 'red' : 'black'}
       />
+
+      {/* Create Pair Modal */}
+      {showCreatePairModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div className="p-4 border-b border-gray-200">
+              <h3 className="text-lg font-semibold">Create Pair</h3>
+              <p className="text-sm text-gray-600 mt-1">Select 2 athletes to form a pair</p>
+            </div>
+            
+            <div className="p-4 max-h-96 overflow-y-auto">
+              {availableAthletes.length < 2 ? (
+                <p className="text-gray-600 text-center py-4">
+                  Not enough available athletes. Need at least 2 to create a pair.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {availableAthletes.map((athlete) => {
+                    const isSelected = selectedAthletes.includes(athlete.id)
+                    return (
+                      <button
+                        key={athlete.id}
+                        onClick={() => handleAthleteSelect(athlete.id)}
+                        disabled={!isSelected && selectedAthletes.length >= 2}
+                        className={`w-full flex items-center justify-between p-3 rounded border-2 transition-all ${
+                          isSelected
+                            ? 'bg-purple-100 border-purple-400'
+                            : selectedAthletes.length >= 2
+                            ? 'bg-gray-100 border-gray-200 opacity-50 cursor-not-allowed'
+                            : 'bg-white border-gray-200 hover:border-purple-300 hover:bg-purple-50'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                            isSelected ? 'bg-purple-500 border-purple-500' : 'border-gray-300'
+                          }`}>
+                            {isSelected && (
+                              <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                              </svg>
+                            )}
+                          </div>
+                          <span className="font-medium">{athlete.name}</span>
+                        </div>
+                        <span className="text-sm text-gray-500">Rank {athlete.rank}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+            
+            <div className="p-4 border-t border-gray-200 flex gap-2">
+              <button
+                onClick={() => {
+                  setShowCreatePairModal(false)
+                  setSelectedAthletes([])
+                }}
+                disabled={creatingPair}
+                className="flex-1 border border-gray-200 px-4 py-2 text-sm font-medium hover:bg-gray-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCreatePair}
+                disabled={selectedAthletes.length !== 2 || creatingPair}
+                className="flex-1 bg-purple-600 text-white px-4 py-2 text-sm font-medium hover:bg-purple-700 disabled:bg-gray-400"
+              >
+                {creatingPair ? 'Creating...' : `Create Pair${selectedAthletes.length === 2 ? '' : ` (${selectedAthletes.length}/2)`}`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

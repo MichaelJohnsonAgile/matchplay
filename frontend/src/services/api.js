@@ -290,5 +290,32 @@ export const teamsAPI = {
       method: 'DELETE',
     })
   },
+  
+  // ============= PAIRS MODE =============
+  
+  // Create a new pair (pairs mode)
+  async createPair(gameDayId, athlete1Id, athlete2Id) {
+    return apiRequest(`/gamedays/${gameDayId}/pairs`, {
+      method: 'POST',
+      body: JSON.stringify({ athlete1Id, athlete2Id }),
+    })
+  },
+  
+  // Get pair standings (pairs mode)
+  async getPairStandings(gameDayId) {
+    return apiRequest(`/gamedays/${gameDayId}/pairs/standings`)
+  },
+  
+  // Get available athletes not yet in a pair (pairs mode)
+  async getAvailableAthletes(gameDayId) {
+    return apiRequest(`/gamedays/${gameDayId}/pairs/available`)
+  },
+  
+  // Delete a pair (pairs mode)
+  async deletePair(gameDayId, pairId) {
+    return apiRequest(`/gamedays/${gameDayId}/pairs/${pairId}`, {
+      method: 'DELETE',
+    })
+  },
 }
 

@@ -802,3 +802,111 @@ export async function getTeamStandings(gameDayId) {
   return standings
 }
 
+// ============= PAIRS (Pairs are teams of exactly 2) =============
+
+// Create a pair (team with exactly 2 members)
+export async function createPair(gameDayId, athlete1Id, athlete2Id, pairNumber) {
+  const { v4: uuidv4 } = await import('uuid')
+  
+  // Get athlete names for auto-naming
+  const [athlete1, athlete2] = await Promise.all([
+    getAthleteById(athlete1Id),
+    getAthleteById(athlete2Id)
+  ])
+  
+  if (!athlete1 || !athlete2) {
+    throw new Error('One or both athletes not found')
+  }
+  
+  // Get first names for pair name
+  const firstName1 = athlete1.name.split(' ')[0]
+  const firstName2 = athlete2.name.split(' ')[0]
+  const pairName = `${firstName1} & ${firstName2}`
+  
+  // Create team entry (pairs reuse teams table)
+  const teamId = `pair-${uuidv4()}`
+  const team = await createTeam({
+    id: teamId,
+    gameDayId,
+    teamNumber: pairNumber,
+    teamName: pairName,
+    teamColor: null // Pairs don't use team colours
+  })
+  
+  // Add both athletes to the team
+  await addAthleteToTeam(teamId, athlete1Id)
+  await addAthleteToTeam(teamId, athlete2Id)
+  
+  return {
+    ...team,
+    members: [athlete1, athlete2]
+  }
+}
+
+// Get next pair number for a game day
+export async function getNextPairNumber(gameDayId) {
+  const result = await query(
+    'SELECT COALESCE(MAX(team_number), 0) + 1 as next_number FROM teams WHERE gameday_id = $1',
+    [gameDayId]
+  )
+  return result.rows[0].next_number
+}
+
+// Get pair standings (same as team standings but with pair-specific formatting)
+export async function getPairStandings(gameDayId) {
+  const teams = await getTeamsByGameDay(gameDayId)
+  
+  const standings = await Promise.all(teams.map(async (team) => {
+    const members = await getTeamMembers(team.id)
+    const stats = await getTeamStats(team.id)
+    
+    // Auto-generate pair name from member first names if not set
+    let displayName = team.team_name
+    if (!displayName && members.length === 2) {
+      const firstName1 = members[0].name.split(' ')[0]
+      const firstName2 = members[1].name.split(' ')[0]
+      displayName = `${firstName1} & ${firstName2}`
+    }
+    
+    return {
+      pairId: team.id,
+      pairNumber: team.team_number,
+      pairName: displayName,
+      members: members.map(m => ({
+        id: m.id,
+        name: m.name,
+        rank: m.rank
+      })),
+      ...stats
+    }
+  }))
+  
+  // Sort by wins (primary), then point difference (tiebreaker), then points scored
+  standings.sort((a, b) => {
+    if (b.wins !== a.wins) return b.wins - a.wins
+    if (b.pointDiff !== a.pointDiff) return b.pointDiff - a.pointDiff
+    return b.pointsFor - a.pointsFor
+  })
+  
+  return standings
+}
+
+// Get athletes not yet assigned to a pair for this game day
+export async function getUnpairedAthletes(gameDayId) {
+  const result = await query(
+    `SELECT a.id, a.name, a.email, a.rank, a.status
+     FROM athletes a
+     INNER JOIN gameday_athletes ga ON a.id = ga.athlete_id
+     WHERE ga.gameday_id = $1
+       AND a.id NOT IN (
+         SELECT tm.athlete_id 
+         FROM team_members tm
+         INNER JOIN teams t ON tm.team_id = t.id
+         WHERE t.gameday_id = $1
+       )
+     ORDER BY a.rank ASC`,
+    [gameDayId]
+  )
+  return result.rows
+}
+

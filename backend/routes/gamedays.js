@@ -322,6 +322,9 @@ gameDayRoutes.post('/:id/generate-draw', async (req, res) => {
     if (gameDay.format === 'teams') {
       // TEAMS MODE
       return await generateTeamsMatches(req.params.id, gameDay, res)
+    } else if (gameDay.format === 'pairs') {
+      // PAIRS MODE - Round-robin
+      return await generatePairsMatches(req.params.id, gameDay, res)
     } else {
       // GROUP MODE (existing logic)
       // Validate minimum athletes
@@ -1458,5 +1461,173 @@ function findBestTeamMatch(teamData, teamPairs, playersInRound, playerGameCount,
   }
   
   return bestMatch
+}
+
+// ============= PAIRS MODE MATCH GENERATION =============
+
+// Generate matches for pairs mode using round-robin algorithm
+// Each pair plays every other pair once per iteration
+// Number of iterations (1, 2, or 3) is controlled by number_of_rounds setting
+async function generatePairsMatches(gameDayId, gameDay, res) {
+  try {
+    console.log('Generating matches for PAIRS mode')
+    
+    // Get pairs (stored as teams with 2 members)
+    const pairs = await db.getTeamsByGameDay(gameDayId)
+    
+    if (pairs.length < 2) {
+      return res.status(400).json({
+        error: 'Need at least 2 pairs to generate matches.',
+        suggestion: 'Go to the Pairs tab and create more pairs.',
+        currentCount: pairs.length
+      })
+    }
+    
+    console.log(`Found ${pairs.length} pairs`)
+    
+    // Get pair members for each pair
+    const pairData = await Promise.all(pairs.map(async (pair) => {
+      const members = await db.getTeamMembers(pair.id)
+      return {
+        pair,
+        members
+      }
+    }))
+    
+    // Sort pairs by pair_number for consistent ordering
+    pairData.sort((a, b) => a.pair.team_number - b.pair.team_number)
+    
+    // Validate all pairs have exactly 2 members
+    for (const { pair, members } of pairData) {
+      if (members.length !== 2) {
+        return res.status(400).json({
+          error: `Pair "${pair.team_name}" has ${members.length} members instead of 2.`,
+          suggestion: 'Each pair must have exactly 2 players.'
+        })
+      }
+    }
+    
+    const numPairs = pairData.length
+    const iterations = gameDay.number_of_rounds || 1 // How many times to repeat the round-robin
+    
+    // Generate round-robin schedule using circle method
+    // For n pairs: n-1 rounds per iteration (or n rounds if odd, with bye)
+    const hasOddPairs = numPairs % 2 === 1
+    const effectivePairs = hasOddPairs ? numPairs + 1 : numPairs // Add phantom pair for bye
+    const roundsPerIteration = effectivePairs - 1
+    const totalRounds = roundsPerIteration * iterations
+    
+    console.log(`Generating ${totalRounds} rounds (${roundsPerIteration} per iteration x ${iterations} iterations)`)
+    console.log(`Odd pairs: ${hasOddPairs}, effective pairs: ${effectivePairs}`)
+    
+    const scheduledMatches = []
+    let matchNumber = 0
+    
+    // Circle method: Fix pair 0 in place, rotate others
+    // Create rotation array (indices into pairData, or -1 for bye)
+    const rotationArray = []
+    for (let i = 1; i < effectivePairs; i++) {
+      if (hasOddPairs && i === effectivePairs - 1) {
+        rotationArray.push(-1) // Bye position
+      } else {
+        rotationArray.push(i - 1) // Adjust for 0-indexed pairData (pair 0 is fixed)
+      }
+    }
+    
+    for (let iteration = 0; iteration < iterations; iteration++) {
+      // Reset rotation for each iteration
+      const rotation = [...rotationArray]
+      
+      for (let roundInIteration = 0; roundInIteration < roundsPerIteration; roundInIteration++) {
+        const roundNumber = (iteration * roundsPerIteration) + roundInIteration + 1
+        console.log(`\nRound ${roundNumber} (Iteration ${iteration + 1}, Round ${roundInIteration + 1}):`)
+        
+        // Match pair 0 (fixed) with the first element of rotation
+        const matchups = []
+        
+        // Pair 0 vs rotation[0]
+        if (rotation[0] !== -1) {
+          matchups.push([0, rotation[0] + 1]) // +1 because pair 0 is at index 0
+        } else {
+          console.log(`  Pair ${pairData[0].pair.team_name} has bye`)
+        }
+        
+        // Match remaining pairs in rotation (folding: i matches with n-1-i)
+        for (let i = 1; i <= Math.floor(rotation.length / 2); i++) {
+          const idx1 = rotation[i]
+          const idx2 = rotation[rotation.length - i]
+          
+          if (idx1 === -1) {
+            console.log(`  Pair ${pairData[idx2 + 1].pair.team_name} has bye`)
+          } else if (idx2 === -1) {
+            console.log(`  Pair ${pairData[idx1 + 1].pair.team_name} has bye`)
+          } else {
+            matchups.push([idx1 + 1, idx2 + 1]) // +1 because pair 0 is fixed
+          }
+        }
+        
+        // Create matches for this round
+        for (const [pairAIdx, pairBIdx] of matchups) {
+          const pairA = pairData[pairAIdx]
+          const pairB = pairData[pairBIdx]
+          
+          matchNumber++
+          const matchId = `match-${uuidv4()}`
+          
+          console.log(`  Match ${matchNumber}: ${pairA.pair.team_name} vs ${pairB.pair.team_name}`)
+          
+          scheduledMatches.push({
+            id: matchId,
+            gameDayId,
+            round: roundNumber,
+            group: 1, // All pairs in same group
+            court: null,
+            teamA: {
+              players: [pairA.members[0].id, pairA.members[1].id],
+              score: null
+            },
+            teamB: {
+              players: [pairB.members[0].id, pairB.members[1].id],
+              score: null
+            },
+            teamATeamId: pairA.pair.id,
+            teamBTeamId: pairB.pair.id,
+            bye: null,
+            status: 'pending',
+            winner: null,
+            timestamp: null
+          })
+        }
+        
+        // Rotate: move first element to end
+        const first = rotation.shift()
+        rotation.push(first)
+      }
+    }
+    
+    // Save matches to database
+    for (const match of scheduledMatches) {
+      await db.createMatch(match)
+    }
+    
+    const matchesPerPair = totalRounds // Each pair plays once per round (or has bye)
+    
+    console.log(`\n✅ Generated ${scheduledMatches.length} matches across ${totalRounds} rounds`)
+    
+    return res.json({
+      message: 'Pairs matches generated successfully',
+      matchesGenerated: scheduledMatches.length,
+      rounds: totalRounds,
+      pairs: numPairs,
+      format: 'pairs',
+      iterations: iterations,
+      matchesPerPair: hasOddPairs ? matchesPerPair - iterations : matchesPerPair, // Account for bye rounds
+      success: true
+    })
+    
+  } catch (error) {
+    console.error('Error generating pairs matches:', error)
+    throw error
+  }
 }
 
