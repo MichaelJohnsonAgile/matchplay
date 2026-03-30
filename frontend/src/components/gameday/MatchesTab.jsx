@@ -183,6 +183,28 @@ export default function MatchesTab({ gameDayId, gameDay, isAdminMode = false }) 
         m.group === parseInt(selectedGroup)
       )
   
+  // Compute who is sitting out (bye) this round in teams mode
+  const roundByePlayers = (() => {
+    if (!isTeamsMode || filteredMatches.length === 0 || teams.length === 0) return []
+    
+    // Get all team members
+    const allTeamPlayerIds = new Set()
+    teams.forEach(team => {
+      team.members.forEach(member => allTeamPlayerIds.add(member.id))
+    })
+    
+    // Get all players appearing in this round's matches
+    const playersInRound = new Set()
+    filteredMatches.forEach(match => {
+      match.teamA.players.forEach(pid => playersInRound.add(pid))
+      match.teamB.players.forEach(pid => playersInRound.add(pid))
+    })
+    
+    // Players with a bye = team members not in any match this round
+    const byePlayerIds = [...allTeamPlayerIds].filter(pid => !playersInRound.has(pid))
+    return byePlayerIds
+  })()
+  
   // Calculate group leaderboard for selected round and group
   const calculateGroupLeaderboard = () => {
     const groupMatches = filteredMatches
@@ -491,6 +513,28 @@ export default function MatchesTab({ gameDayId, gameDay, isAdminMode = false }) 
               <div key={team.teamId} className="flex items-center gap-1.5">
                 <span className={`w-3 h-3 rounded-full ${colorClasses?.bg || 'bg-gray-400'}`} />
                 <span className="text-sm">{team.teamName}</span>
+              </div>
+            )
+          })}
+        </div>
+      )}
+      
+      {/* Bye/Sitting Out indicator - for teams mode when players don't fit evenly */}
+      {isTeamsMode && roundByePlayers.length > 0 && (
+        <div className="flex items-center gap-3 flex-wrap bg-orange-50 p-3 rounded border border-orange-200">
+          <span className="text-sm text-orange-700 font-medium">Sitting out this round:</span>
+          {roundByePlayers.map(playerId => {
+            const teamInfo = getAthleteTeamInfo(playerId)
+            const colorClasses = teamInfo ? TEAM_COLOR_CLASSES[teamInfo.teamColor] : null
+            return (
+              <div key={playerId} className="flex items-center gap-1.5 bg-white px-2 py-1 rounded border border-orange-200">
+                {colorClasses && (
+                  <span 
+                    className={`w-2.5 h-2.5 rounded-full ${colorClasses.bg} flex-shrink-0`}
+                    title={teamInfo.teamName}
+                  />
+                )}
+                <span className="text-sm">{getAthleteName(playerId)}</span>
               </div>
             )
           })}

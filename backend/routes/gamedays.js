@@ -955,70 +955,231 @@ async function generateTeamsMatches(gameDayId, gameDay, res) {
   }
 }
 
+// Select which players should have a bye this round, distributing evenly.
+// Returns an array of player IDs that should sit out.
+// byeCountMap tracks how many times each player has had a bye so far.
+// teamMembership maps player ID to 'blue' or 'red' so we don't over-deplete a team.
+// minPlayersNeeded specifies how many players each team must retain for matches.
+function selectByePlayers(allPlayers, numByes, byeCountMap, teamMembership, teamCounts, minPlayersNeeded) {
+  if (numByes <= 0) return []
+
+  // Sort players by bye count (ascending) so those who've sat out least go first,
+  // then by their index in allPlayers for stable tie-breaking
+  const candidates = allPlayers.map((p, idx) => ({
+    id: p.id,
+    index: idx,
+    team: teamMembership.get(p.id),
+    byeCount: byeCountMap.get(p.id) || 0
+  }))
+
+  candidates.sort((a, b) => {
+    if (a.byeCount !== b.byeCount) return a.byeCount - b.byeCount
+    return a.index - b.index
+  })
+
+  // Greedily pick bye players, ensuring each team retains enough players
+  // to fill all match slots for the round
+  const selected = []
+  const teamByeCount = { blue: 0, red: 0 }
+
+  for (const candidate of candidates) {
+    if (selected.length >= numByes) break
+
+    const team = candidate.team
+    const remainingOnTeam = teamCounts[team] - teamByeCount[team]
+
+    if (remainingOnTeam <= minPlayersNeeded[team]) continue
+
+    selected.push(candidate)
+    teamByeCount[team]++
+  }
+
+  return selected.map(c => c.id)
+}
+
+// Score a candidate match for quality. Lower score = better.
+function scoreMatch(bluePair, redPair, playerGameCount, pairUsageCount, versusTracker) {
+  const blueKey = [bluePair[0], bluePair[1]].sort().join('-')
+  const redKey = [redPair[0], redPair[1]].sort().join('-')
+
+  // Versus coverage: prefer matches that create new opponent pairings
+  let newVersusPairings = 0
+  for (const bId of bluePair) {
+    for (const rId of redPair) {
+      if (!versusTracker.get(bId)?.has(rId)) {
+        newVersusPairings++
+      }
+    }
+  }
+  const versusCoverageBonus = (4 - newVersusPairings) * 100
+
+  // Fairness: prefer players with fewer games played
+  const totalGamesPlayed = [...bluePair, ...redPair].reduce(
+    (sum, pid) => sum + (playerGameCount.get(pid) || 0), 0
+  )
+
+  // Partnership variety: prefer less-used pair combinations
+  const pairUsage = (pairUsageCount.get(blueKey) || 0) + (pairUsageCount.get(redKey) || 0)
+
+  return versusCoverageBonus + (totalGamesPlayed * 10) + pairUsage
+}
+
 // Generate matches for 2-team format (Blue vs Red)
-// Rotating partnerships AND matchups:
-// - Partnerships change each round (rotate through different partner combos)
-// - Blue rotates forward, Red rotates backward (inverse rotation)
-// - 8 rounds, 3 matches per round
+// Dynamically handles any team size. When total players isn't divisible by 4,
+// byes are distributed evenly so no player sits out more than others.
 async function generateTwoTeamsMatches(gameDayId, teamData, res) {
   const blueTeam = teamData[0] // Team 1 = Blue
   const redTeam = teamData[1]  // Team 2 = Red
-  
-  // Sort players by rank (ascending: rank 1 first)
+
   const bluePlayers = [...blueTeam.members].sort((a, b) => a.rank - b.rank)
   const redPlayers = [...redTeam.members].sort((a, b) => a.rank - b.rank)
-  
+
   const blueCount = bluePlayers.length
   const redCount = redPlayers.length
-  
-  console.log(`2-Team mode: ${blueCount} Blue vs ${redCount} Red`)
+  const totalPlayers = blueCount + redCount
+
+  console.log(`2-Team mode: ${blueCount} Blue vs ${redCount} Red (${totalPlayers} total)`)
   console.log('Blue players by rank:', bluePlayers.map(p => `${p.name}(${p.rank})`).join(', '))
   console.log('Red players by rank:', redPlayers.map(p => `${p.name}(${p.rank})`).join(', '))
-  
-  // Partnership rotations for 6 players (indices 0-5 representing ranks 1-6)
-  // Each config has 3 pairs that cover all 6 players
-  // Designed so each player partners with different people across rounds
-  const partnershipRotations = [
-    [[0, 5], [1, 4], [2, 3]],  // Round 1: 1+6, 2+5, 3+4
-    [[0, 4], [1, 3], [2, 5]],  // Round 2: 1+5, 2+4, 3+6
-    [[0, 3], [1, 2], [4, 5]],  // Round 3: 1+4, 2+3, 5+6
-    [[0, 2], [1, 5], [3, 4]],  // Round 4: 1+3, 2+6, 4+5
-    [[0, 1], [2, 4], [3, 5]],  // Round 5: 1+2, 3+5, 4+6
-    [[0, 5], [1, 3], [2, 4]],  // Round 6: 1+6, 2+4, 3+5
-    [[0, 4], [1, 2], [3, 5]],  // Round 7: 1+5, 2+3, 4+6
-    [[0, 3], [1, 4], [2, 5]],  // Round 8: 1+4, 2+5, 3+6
-  ]
-  
+
+  // Each match needs exactly 2 blue + 2 red players
+  // The bottleneck is whichever team can form fewer pairs
+  const matchesPerRound = Math.min(Math.floor(blueCount / 2), Math.floor(redCount / 2))
+  const playersPerMatch = 4
+  const numByesPerRound = totalPlayers - (matchesPerRound * playersPerMatch)
+
+  // Need at least 2 per side for 1 match
+  if (matchesPerRound < 1 || blueCount < 2 || redCount < 2) {
+    return res.status(400).json({
+      error: 'Need at least 2 players per team to generate matches',
+      blueCount,
+      redCount
+    })
+  }
+
+  console.log(`Matches per round: ${matchesPerRound}, Byes per round: ${numByesPerRound}`)
+
   const numberOfRounds = 8
   const scheduledMatches = []
-  
+
+  // Track byes for fair distribution
+  const byeCountMap = new Map()
+  const allPlayers = [...bluePlayers, ...redPlayers]
+  allPlayers.forEach(p => byeCountMap.set(p.id, 0))
+
+  // Team membership lookup for bye selection constraints
+  const teamMembership = new Map()
+  bluePlayers.forEach(p => teamMembership.set(p.id, 'blue'))
+  redPlayers.forEach(p => teamMembership.set(p.id, 'red'))
+  const teamCounts = { blue: blueCount, red: redCount }
+
+  // Track games per player for fairness
+  const playerGameCount = new Map()
+  allPlayers.forEach(p => playerGameCount.set(p.id, 0))
+
+  // Track partnership usage for variety
+  const pairUsageCount = new Map()
+
+  // Track versus pairings for coverage
+  const versusTracker = new Map()
+  allPlayers.forEach(p => versusTracker.set(p.id, new Set()))
+
   for (let round = 1; round <= numberOfRounds; round++) {
     console.log(`\nRound ${round}:`)
-    
-    // Blue team uses rotations going forward (0, 1, 2, 3, 4, 5, 6, 7)
-    const blueRotationIdx = (round - 1) % partnershipRotations.length
-    
-    // Red team uses rotations going backward (inverse) for variety
-    // This ensures Blue and Red pairs don't always match up the same way
-    const redRotationIdx = (partnershipRotations.length - 1 - ((round - 1) % partnershipRotations.length))
-    
-    const bluePairings = partnershipRotations[blueRotationIdx]
-    const redPairings = partnershipRotations[redRotationIdx]
-    
-    console.log(`  Blue rotation: ${blueRotationIdx + 1}, Red rotation: ${redRotationIdx + 1}`)
-    
-    // Create 3 matches for this round
-    for (let matchIdx = 0; matchIdx < 3; matchIdx++) {
-      const bluePair = bluePairings[matchIdx]
-      const redPair = redPairings[matchIdx]
-      
-      const bluePlayer1 = bluePlayers[bluePair[0]]
-      const bluePlayer2 = bluePlayers[bluePair[1]]
-      const redPlayer1 = redPlayers[redPair[0]]
-      const redPlayer2 = redPlayers[redPair[1]]
-      
-      console.log(`  Match ${matchIdx + 1}: ${bluePlayer1.name}+${bluePlayer2.name} vs ${redPlayer1.name}+${redPlayer2.name}`)
-      
+
+    // Determine who has a bye this round (evenly distributed)
+    // Byes can come from either team; distribute across all players while
+    // ensuring each team retains enough players to fill match slots
+    const minPlayersNeeded = {
+      blue: matchesPerRound * 2,
+      red: matchesPerRound * 2
+    }
+    const byePlayerIds = selectByePlayers(allPlayers, numByesPerRound, byeCountMap, teamMembership, teamCounts, minPlayersNeeded)
+    const byeSet = new Set(byePlayerIds)
+
+    // Update bye counts
+    byePlayerIds.forEach(pid => byeCountMap.set(pid, (byeCountMap.get(pid) || 0) + 1))
+
+    if (byePlayerIds.length > 0) {
+      const byeNames = byePlayerIds.map(pid => allPlayers.find(p => p.id === pid)?.name).join(', ')
+      console.log(`  Bye: ${byeNames}`)
+    }
+
+    // Get available players for this round (excluding byes)
+    const availableBlue = bluePlayers.filter(p => !byeSet.has(p.id))
+    const availableRed = redPlayers.filter(p => !byeSet.has(p.id))
+
+    // Generate pairs from available players
+    const roundBluePairs = []
+    for (let i = 0; i < availableBlue.length; i++) {
+      for (let j = i + 1; j < availableBlue.length; j++) {
+        roundBluePairs.push([availableBlue[i].id, availableBlue[j].id])
+      }
+    }
+
+    const roundRedPairs = []
+    for (let i = 0; i < availableRed.length; i++) {
+      for (let j = i + 1; j < availableRed.length; j++) {
+        roundRedPairs.push([availableRed[i].id, availableRed[j].id])
+      }
+    }
+
+    // Greedily select matchesPerRound non-overlapping matches
+    const playersUsedThisRound = new Set()
+    const roundMatches = []
+
+    for (let m = 0; m < matchesPerRound; m++) {
+      let bestBluePair = null
+      let bestRedPair = null
+      let bestScore = Infinity
+
+      for (const bp of roundBluePairs) {
+        if (playersUsedThisRound.has(bp[0]) || playersUsedThisRound.has(bp[1])) continue
+
+        for (const rp of roundRedPairs) {
+          if (playersUsedThisRound.has(rp[0]) || playersUsedThisRound.has(rp[1])) continue
+
+          const s = scoreMatch(bp, rp, playerGameCount, pairUsageCount, versusTracker)
+          if (s < bestScore) {
+            bestScore = s
+            bestBluePair = bp
+            bestRedPair = rp
+          }
+        }
+      }
+
+      if (bestBluePair && bestRedPair) {
+        roundMatches.push({ bluePair: bestBluePair, redPair: bestRedPair })
+        bestBluePair.forEach(pid => playersUsedThisRound.add(pid))
+        bestRedPair.forEach(pid => playersUsedThisRound.add(pid))
+
+        // Update tracking
+        const allMatchPlayers = [...bestBluePair, ...bestRedPair]
+        allMatchPlayers.forEach(pid => playerGameCount.set(pid, (playerGameCount.get(pid) || 0) + 1))
+
+        const blueKey = [...bestBluePair].sort().join('-')
+        const redKey = [...bestRedPair].sort().join('-')
+        pairUsageCount.set(blueKey, (pairUsageCount.get(blueKey) || 0) + 1)
+        pairUsageCount.set(redKey, (pairUsageCount.get(redKey) || 0) + 1)
+
+        for (const bId of bestBluePair) {
+          for (const rId of bestRedPair) {
+            versusTracker.get(bId).add(rId)
+            versusTracker.get(rId).add(bId)
+          }
+        }
+      }
+    }
+
+    // Create match records
+    for (const { bluePair, redPair } of roundMatches) {
+      const bp1 = allPlayers.find(p => p.id === bluePair[0])
+      const bp2 = allPlayers.find(p => p.id === bluePair[1])
+      const rp1 = allPlayers.find(p => p.id === redPair[0])
+      const rp2 = allPlayers.find(p => p.id === redPair[1])
+
+      console.log(`  Match: ${bp1.name}+${bp2.name} vs ${rp1.name}+${rp2.name}`)
+
       const matchId = `match-${uuidv4()}`
       scheduledMatches.push({
         id: matchId,
@@ -1027,11 +1188,11 @@ async function generateTwoTeamsMatches(gameDayId, teamData, res) {
         group: 1,
         court: null,
         teamA: {
-          players: [bluePlayer1.id, bluePlayer2.id],
+          players: [bluePair[0], bluePair[1]],
           score: null
         },
         teamB: {
-          players: [redPlayer1.id, redPlayer2.id],
+          players: [redPair[0], redPair[1]],
           score: null
         },
         teamATeamId: blueTeam.team.id,
@@ -1043,25 +1204,43 @@ async function generateTwoTeamsMatches(gameDayId, teamData, res) {
       })
     }
   }
-  
+
   // Save matches to database
   for (const match of scheduledMatches) {
     await db.createMatch(match)
   }
-  
+
+  // Log distribution summary
   const totalMatches = scheduledMatches.length
-  const gamesPerPlayer = numberOfRounds // Everyone plays once per round
-  
+  const gameCounts = Array.from(playerGameCount.values())
+  const minGames = Math.min(...gameCounts)
+  const maxGames = Math.max(...gameCounts)
+  const avgGames = (gameCounts.reduce((a, b) => a + b, 0) / gameCounts.length).toFixed(1)
+
+  const byeCounts = Array.from(byeCountMap.values())
+  const minByes = Math.min(...byeCounts)
+  const maxByes = Math.max(...byeCounts)
+
   console.log(`\n✅ Generated ${totalMatches} team matches across ${numberOfRounds} rounds`)
-  console.log(`Each player plays ${gamesPerPlayer} games with different partners each round`)
-  
+  console.log(`Games per player: min=${minGames}, max=${maxGames}, avg=${avgGames}`)
+  if (numByesPerRound > 0) {
+    console.log(`Byes per player: min=${minByes}, max=${maxByes} (evenly distributed)`)
+    console.log('Bye distribution:', Array.from(byeCountMap.entries()).map(([pid, count]) => {
+      const name = allPlayers.find(p => p.id === pid)?.name
+      return `${name}: ${count}`
+    }).join(', '))
+  }
+
   return res.json({
     message: 'Teams matches generated successfully',
     matchesGenerated: totalMatches,
     rounds: numberOfRounds,
     teams: 2,
     format: 'teams',
-    gamesPerPlayer: { min: gamesPerPlayer, max: gamesPerPlayer, avg: gamesPerPlayer },
+    matchesPerRound,
+    byesPerRound: numByesPerRound,
+    gamesPerPlayer: { min: minGames, max: maxGames, avg: parseFloat(avgGames) },
+    byeDistribution: numByesPerRound > 0 ? { min: minByes, max: maxByes } : null,
     success: true
   })
 }
