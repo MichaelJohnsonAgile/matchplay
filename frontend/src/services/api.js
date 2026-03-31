@@ -1,13 +1,14 @@
 // API service layer for backend communication
 // Base URL will come from environment variable
-const API_BASE_URL = import.meta.env.VITE_API_URL 
+const API_BASE_URL = import.meta.env.VITE_API_URL
   ? `${import.meta.env.VITE_API_URL}/api`
   : 'http://localhost:3001/api'
 
 // Helper function for making API requests
+// Pass authHeaders (from useAuth().authHeader()) as options.headers to authenticate.
 async function apiRequest(endpoint, options = {}) {
   const url = `${API_BASE_URL}${endpoint}`
-  
+
   const config = {
     headers: {
       'Content-Type': 'application/json',
@@ -340,3 +341,98 @@ export const teamsAPI = {
   },
 }
 
+// Courts / Playtomic APIs (unauthenticated proxy to Playtomic)
+export const courtsAPI = {
+  async getVenues({ lat, lng, radius, size } = {}) {
+    const params = new URLSearchParams()
+    if (lat) params.set('lat', lat)
+    if (lng) params.set('lng', lng)
+    if (radius) params.set('radius', radius)
+    if (size) params.set('size', size)
+    return apiRequest(`/courts/venues?${params}`)
+  },
+
+  async getAvailability({ tenantId, date } = {}) {
+    const params = new URLSearchParams()
+    if (tenantId) params.set('tenantId', tenantId)
+    if (date) params.set('date', date)
+    return apiRequest(`/courts/availability?${params}`)
+  },
+
+  async getDeepLink({ tenantId, date, startTime } = {}) {
+    const params = new URLSearchParams()
+    if (tenantId) params.set('tenantId', tenantId)
+    if (date) params.set('date', date)
+    if (startTime) params.set('startTime', startTime)
+    return apiRequest(`/courts/deeplink?${params}`)
+  },
+}
+
+// Matchmaking APIs (all authenticated — pass authHeader() as second arg)
+export const matchmakingAPI = {
+  async getProfile(headers = {}) {
+    return apiRequest('/matchmaking/profile', { headers })
+  },
+
+  async updateProfile(data, headers = {}) {
+    return apiRequest('/matchmaking/profile', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+      headers,
+    })
+  },
+
+  async getAvailability(params = {}, headers = {}) {
+    const qs = new URLSearchParams(params).toString()
+    return apiRequest(`/matchmaking/availability${qs ? '?' + qs : ''}`, { headers })
+  },
+
+  async getMyAvailability(headers = {}) {
+    return apiRequest('/matchmaking/my-availability', { headers })
+  },
+
+  async postAvailability(data, headers = {}) {
+    return apiRequest('/matchmaking/availability', {
+      method: 'POST',
+      body: JSON.stringify(data),
+      headers,
+    })
+  },
+
+  async cancelAvailability(slotId, headers = {}) {
+    return apiRequest(`/matchmaking/availability/${slotId}`, { method: 'DELETE', headers })
+  },
+
+  async getPlayers(params = {}, headers = {}) {
+    const qs = new URLSearchParams(params).toString()
+    return apiRequest(`/matchmaking/players${qs ? '?' + qs : ''}`, { headers })
+  },
+
+  async getInvitations(headers = {}) {
+    return apiRequest('/matchmaking/invitations', { headers })
+  },
+
+  async getSentInvitations(headers = {}) {
+    return apiRequest('/matchmaking/sent-invitations', { headers })
+  },
+
+  async sendInvitation(data, headers = {}) {
+    return apiRequest('/matchmaking/invitations', {
+      method: 'POST',
+      body: JSON.stringify(data),
+      headers,
+    })
+  },
+
+  async respondInvitation(id, status, headers = {}) {
+    return apiRequest(`/matchmaking/invitations/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ status }),
+      headers,
+    })
+  },
+
+  async cancelInvitation(id, headers = {}) {
+    return apiRequest(`/matchmaking/invitations/${id}`, { method: 'DELETE', headers })
+  },
+}

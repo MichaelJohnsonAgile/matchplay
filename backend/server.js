@@ -5,6 +5,8 @@ import { athleteRoutes } from './routes/athletes.js'
 import { matchRoutes } from './routes/matches.js'
 import { leaderboardRoutes } from './routes/leaderboard.js'
 import { teamsRoutes } from './routes/teams.js'
+import { courtsRoutes } from './routes/courts.js'
+import { matchmakingRoutes } from './routes/matchmaking.js'
 
 const app = express()
 const PORT = process.env.PORT || 3001
@@ -30,6 +32,8 @@ app.use('/api/teams', teamsRoutes)     // Direct team routes
 app.use('/api/athletes', athleteRoutes)
 app.use('/api/matches', matchRoutes)
 app.use('/api/leaderboard', leaderboardRoutes)
+app.use('/api/courts', courtsRoutes)
+app.use('/api/matchmaking', matchmakingRoutes)
 
 // Health check
 app.get('/health', (req, res) => {
