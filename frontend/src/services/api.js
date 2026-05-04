@@ -251,6 +251,19 @@ export const leaderboardAPI = {
   },
 }
 
+// Group format (round-robin pools)
+export const groupsAPI = {
+  async getForGameDay(gameDayId) {
+    return apiRequest(`/gamedays/${gameDayId}/groups`)
+  },
+
+  async generate(gameDayId) {
+    return apiRequest(`/gamedays/${gameDayId}/groups/generate`, {
+      method: 'POST',
+    })
+  },
+}
+
 // Teams APIs
 export const teamsAPI = {
   // Generate teams for a game day

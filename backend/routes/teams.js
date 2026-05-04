@@ -1,6 +1,7 @@
 import express from 'express'
 import { v4 as uuidv4 } from 'uuid'
 import * as db from '../database/queries.js'
+import { calculateGroupAllocation } from '../lib/groupAllocation.js'
 
 export const teamsRoutes = express.Router()
 
@@ -115,10 +116,12 @@ teamsRoutes.post('/:id/teams/generate', async (req, res) => {
   }
 })
 
-// GET /api/gamedays/:id/teams - Get teams for a game day
+// GET /api/gamedays/:id/teams - Get teams for a game day (excludes group-format pool rows)
 teamsRoutes.get('/:id/teams', async (req, res) => {
   try {
-    const teams = await db.getTeamsByGameDay(req.params.id)
+    const teams = (await db.getTeamsByGameDay(req.params.id)).filter(
+      (t) => t.team_kind !== 'group_pool'
+    )
     
     const teamsWithMembers = await Promise.all(teams.map(async (team) => {
       const members = await db.getTeamMembers(team.id)
@@ -151,6 +154,140 @@ teamsRoutes.get('/:id/teams/standings', async (req, res) => {
   } catch (error) {
     console.error('Error getting team standings:', error)
     res.status(500).json({ error: 'Failed to fetch team standings' })
+  }
+})
+
+// ============= GROUP FORMAT (round-robin pools as team_kind group_pool) =============
+
+// GET /api/gamedays/:id/groups - List group pools with members (group format only)
+teamsRoutes.get('/:id/groups', async (req, res) => {
+  try {
+    const gameDayId = req.params.id
+    const gameDay = await db.getGameDayById(gameDayId)
+    if (!gameDay) {
+      return res.status(404).json({ error: 'Game day not found' })
+    }
+    if (gameDay.format !== 'group') {
+      return res.status(400).json({ error: 'This endpoint is only for group format game days' })
+    }
+
+    const poolTeams = await db.getGroupPoolTeamsByGameDay(gameDayId)
+    const groups = await Promise.all(
+      poolTeams.map(async (team) => {
+        const members = await db.getTeamMembers(team.id)
+        const avgRank =
+          members.length > 0
+            ? members.reduce((sum, m) => sum + m.rank, 0) / members.length
+            : 0
+        return {
+          groupId: team.id,
+          groupNumber: team.team_number,
+          groupName: team.team_name || `Group ${team.team_number}`,
+          teamColor: team.team_color,
+          members: members.map((m) => ({ id: m.id, name: m.name, rank: m.rank })),
+          avgRank: Math.round(avgRank * 10) / 10
+        }
+      })
+    )
+
+    res.json(groups)
+  } catch (error) {
+    console.error('Error getting groups:', error)
+    res.status(500).json({ error: 'Failed to fetch groups' })
+  }
+})
+
+// POST /api/gamedays/:id/groups/generate - Build or rebuild group pools from rank order (no matches)
+teamsRoutes.post('/:id/groups/generate', async (req, res) => {
+  try {
+    const gameDayId = req.params.id
+    const gameDay = await db.getGameDayById(gameDayId)
+    if (!gameDay) {
+      return res.status(404).json({ error: 'Game day not found' })
+    }
+    if (gameDay.format !== 'group') {
+      return res.status(400).json({ error: 'Game day must be in group format' })
+    }
+
+    const matchCount = (await db.getGameDayStats(gameDayId)).matchCount
+    if (matchCount > 0) {
+      return res.status(400).json({
+        error: 'Clear the draw before regenerating groups.',
+        matchCount
+      })
+    }
+
+    await db.syncAthleteRanks()
+    const athletes = await db.getGameDayAthletes(gameDayId)
+    const numAthletes = athletes.length
+
+    if (numAthletes < 8) {
+      return res.status(400).json({
+        error: 'At least 8 athletes required to allocate groups',
+        currentCount: numAthletes
+      })
+    }
+
+    const allocation = calculateGroupAllocation(numAthletes)
+    if (allocation.error) {
+      return res.status(400).json({
+        error: allocation.description,
+        suggestion: 'Add or remove athletes to reach a valid group size'
+      })
+    }
+
+    await db.deleteGroupPoolTeamsByGameDay(gameDayId)
+
+    const GROUP_COLORS = ['blue', 'red', 'green', 'yellow', 'purple', 'orange', 'pink', 'cyan']
+    let athleteIndex = 0
+    const created = []
+
+    for (let i = 0; i < allocation.numGroups; i++) {
+      const groupSize = allocation.groupSizes[i]
+      const slice = athletes.slice(athleteIndex, athleteIndex + groupSize)
+      athleteIndex += groupSize
+
+      const groupNumber = i + 1
+      const color = GROUP_COLORS[i % GROUP_COLORS.length]
+      const team = await db.createTeam({
+        id: `gpool-${uuidv4()}`,
+        gameDayId,
+        teamNumber: groupNumber,
+        teamName: `Group ${groupNumber}`,
+        teamColor: color,
+        teamKind: 'group_pool'
+      })
+
+      for (const a of slice) {
+        await db.addAthleteToTeam(team.id, a.id)
+      }
+
+      const members = await db.getTeamMembers(team.id)
+      const avgRank =
+        members.length > 0
+          ? members.reduce((sum, m) => sum + m.rank, 0) / members.length
+          : 0
+
+      created.push({
+        groupId: team.id,
+        groupNumber: team.team_number,
+        groupName: team.team_name,
+        teamColor: team.team_color,
+        members: members.map((m) => ({ id: m.id, name: m.name, rank: m.rank })),
+        avgRank: Math.round(avgRank * 10) / 10
+      })
+    }
+
+    res.json({
+      message: 'Groups generated successfully',
+      groups: created,
+      allocation: allocation.description,
+      numGroups: allocation.numGroups,
+      groupSizes: allocation.groupSizes
+    })
+  } catch (error) {
+    console.error('Error generating groups:', error)
+    res.status(500).json({ error: 'Failed to generate groups' })
   }
 })
 

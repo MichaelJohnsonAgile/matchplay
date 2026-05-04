@@ -1,6 +1,7 @@
 import express from 'express'
 import { v4 as uuidv4 } from 'uuid'
 import * as db from '../database/queries.js'
+import { calculateGroupAllocation } from '../lib/groupAllocation.js'
 
 export const gameDayRoutes = express.Router()
 
@@ -326,7 +327,7 @@ gameDayRoutes.post('/:id/generate-draw', async (req, res) => {
       // PAIRS MODE - Round-robin
       return await generatePairsMatches(req.params.id, gameDay, res)
     } else {
-      // GROUP MODE (existing logic)
+      // GROUP MODE
       // Validate minimum athletes
       if (numAthletes < 8) {
         console.log(`Not enough athletes: ${numAthletes}`)
@@ -352,15 +353,71 @@ gameDayRoutes.post('/:id/generate-draw', async (req, res) => {
       }
       
       console.log(`Allocation: ${allocation.description}`)
-      
-      // Create groups based on allocation
-      const groups = []
-      let athleteIndex = 0
-      
-      for (let i = 0; i < allocation.numGroups; i++) {
-        const groupSize = allocation.groupSizes[i]
-        groups.push(athletes.slice(athleteIndex, athleteIndex + groupSize))
-        athleteIndex += groupSize
+
+      const poolTeams = await db.getGroupPoolTeamsByGameDay(req.params.id)
+      let groups = []
+
+      if (poolTeams.length > 0) {
+        const athleteIds = new Set(athletes.map((a) => a.id))
+        const poolRows = await Promise.all(
+          poolTeams.map(async (t) => ({
+            team: t,
+            members: await db.getTeamMembers(t.id)
+          }))
+        )
+        poolRows.sort((a, b) => a.team.team_number - b.team.team_number)
+
+        for (const row of poolRows) {
+          const expectedSize = allocation.groupSizes[row.team.team_number - 1]
+          if (row.members.length !== expectedSize) {
+            return res.status(400).json({
+              error: `Group ${row.team.team_number} has ${row.members.length} athletes but the draw expects ${expectedSize} for this field size. Regenerate groups or adjust athletes.`,
+              groupNumber: row.team.team_number,
+              expectedSize,
+              actualSize: row.members.length
+            })
+          }
+        }
+
+        const seen = new Set()
+        for (const row of poolRows) {
+          for (const m of row.members) {
+            if (!athleteIds.has(m.id)) {
+              return res.status(400).json({
+                error: `Athlete in saved groups is not registered for this game day.`,
+                athleteId: m.id
+              })
+            }
+            if (seen.has(m.id)) {
+              return res.status(400).json({
+                error: 'An athlete appears in more than one group. Fix group assignments before generating the draw.',
+                athleteId: m.id
+              })
+            }
+            seen.add(m.id)
+          }
+        }
+
+        if (seen.size !== numAthletes) {
+          return res.status(400).json({
+            error: `Saved groups include ${seen.size} of ${numAthletes} athletes. Everyone must be assigned to exactly one group before generating the draw.`,
+            assignedCount: seen.size,
+            athleteCount: numAthletes
+          })
+        }
+
+        groups = poolRows.map((row) =>
+          row.members.map((m) => athletes.find((a) => a.id === m.id)).filter(Boolean)
+        )
+        console.log(`Using ${groups.length} saved group pool(s) from admin setup`)
+      } else {
+        // Create groups based on rank order (legacy path)
+        let athleteIndex = 0
+        for (let i = 0; i < allocation.numGroups; i++) {
+          const groupSize = allocation.groupSizes[i]
+          groups.push(athletes.slice(athleteIndex, athleteIndex + groupSize))
+          athleteIndex += groupSize
+        }
       }
       
       console.log(`Created ${groups.length} groups`)
@@ -384,6 +441,7 @@ gameDayRoutes.post('/:id/generate-draw', async (req, res) => {
         groups: allocation.numGroups,
         groupSizes: allocation.groupSizes,
         allocation: allocation.description,
+        usedSavedGroups: poolTeams.length > 0,
         success: true
       })
     }
@@ -541,51 +599,6 @@ async function checkAndUpdateGameDayStatus(gameDayId, currentStatus, gameDate, m
   }
   
   return currentStatus
-}
-
-// Helper function to calculate optimal group allocation
-function calculateGroupAllocation(numAthletes) {
-  const numGroups = Math.floor(numAthletes / 4)
-  const remainder = numAthletes % 4
-  
-  if (numGroups === 0) {
-    return {
-      numGroups: 0,
-      groupSizes: [],
-      description: `Need at least 8 athletes (currently ${numAthletes})`,
-      totalAthletes: numAthletes,
-      hasByes: false,
-      has5PlayerGroups: false,
-      error: true
-    }
-  }
-  
-  const groupSizes = []
-  for (let i = 0; i < numGroups; i++) {
-    groupSizes.push(i < remainder ? 5 : 4)
-  }
-  
-  const numGroupsOf5 = remainder
-  const numGroupsOf4 = numGroups - remainder
-  
-  let description = ''
-  if (numGroupsOf5 === 0) {
-    description = `${numGroupsOf4} groups of 4`
-  } else if (numGroupsOf4 === 0) {
-    description = `${numGroupsOf5} groups of 5 (1 bye each)`
-  } else {
-    description = `${numGroupsOf5} groups of 5 (1 bye each), ${numGroupsOf4} groups of 4`
-  }
-  
-  return {
-    numGroups,
-    groupSizes,
-    description,
-    totalAthletes: numAthletes,
-    hasByes: numGroupsOf5 > 0,
-    has5PlayerGroups: numGroupsOf5 > 0,
-    movementRule: numGroupsOf5 > 0 ? '2 up, 2 down' : '1 up, 1 down'
-  }
 }
 
 // Helper function to generate matches for a group (ROUND ROBIN)

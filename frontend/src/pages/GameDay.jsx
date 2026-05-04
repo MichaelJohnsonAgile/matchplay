@@ -5,6 +5,7 @@ import Modal from '../components/Modal'
 import AthletesTab from '../components/gameday/AthletesTab'
 import MatchesTab from '../components/gameday/MatchesTab'
 import { TeamsTab } from '../components/gameday/TeamsTab'
+import { GroupsTab } from '../components/gameday/GroupsTab'
 import { gameDayAPI } from '../services/api'
 import { formatGameDayDate } from '../utils/dateFormat'
 import { useAdminMode, useNavigateWithAdmin } from '../hooks/useAdminMode'
@@ -152,6 +153,7 @@ export default function GameDay() {
   const hasMatches = gameDay.matchCount > 0
   const isTeamsMode = gameDay.settings.format === 'teams'
   const isPairsMode = gameDay.settings.format === 'pairs'
+  const isGroupMode = gameDay.settings.format === 'group'
   
   // Build tabs dynamically based on game mode
   const tabs = [
@@ -167,6 +169,21 @@ export default function GameDay() {
     tabs.push({
       label: isPairsMode ? 'Pairs' : 'Teams',
       content: <TeamsTab gameDayId={id} settings={gameDay.settings} onUpdate={loadGameDay} isAdminMode={isAdminMode} />,
+      disabled: false
+    })
+  }
+
+  if (isGroupMode) {
+    tabs.push({
+      label: 'Groups',
+      content: (
+        <GroupsTab
+          gameDayId={id}
+          gameDay={gameDay}
+          onUpdate={loadGameDay}
+          isAdminMode={isAdminMode}
+        />
+      ),
       disabled: false
     })
   }
