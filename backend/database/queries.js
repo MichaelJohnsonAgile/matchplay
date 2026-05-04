@@ -1,4 +1,5 @@
 import { query } from './db.js'
+import { isGroupPoolTeamId } from '../lib/teamIds.js'
 
 // ============= ATHLETES =============
 
@@ -661,6 +662,25 @@ export async function getTeamsByGameDay(gameDayId) {
   return result.rows
 }
 
+/** Group-format round-robin pools: rows with id prefix gpool- (see lib/teamIds.js). */
+export async function getGroupPoolTeamsByGameDay(gameDayId) {
+  const result = await query(
+    `SELECT * FROM teams 
+     WHERE gameday_id = $1 AND id LIKE 'gpool-%' 
+     ORDER BY team_number ASC`,
+    [gameDayId]
+  )
+  return result.rows
+}
+
+export async function deleteGroupPoolTeamsByGameDay(gameDayId) {
+  const result = await query(
+    `DELETE FROM teams WHERE gameday_id = $1 AND id LIKE 'gpool-%'`,
+    [gameDayId]
+  )
+  return result.rowCount
+}
+
 export async function updateTeam(teamId, updates) {
   const { teamName, teamColor } = updates
   const result = await query(
@@ -772,7 +792,7 @@ export async function getTeamStats(teamId) {
 }
 
 export async function getTeamStandings(gameDayId) {
-  const teams = await getTeamsByGameDay(gameDayId)
+  const teams = (await getTeamsByGameDay(gameDayId)).filter((t) => !isGroupPoolTeamId(t.id))
   
   const standings = await Promise.all(teams.map(async (team) => {
     const members = await getTeamMembers(team.id)
@@ -846,7 +866,9 @@ export async function createPair(gameDayId, athlete1Id, athlete2Id, pairNumber) 
 // Get next pair number for a game day
 export async function getNextPairNumber(gameDayId) {
   const result = await query(
-    'SELECT COALESCE(MAX(team_number), 0) + 1 as next_number FROM teams WHERE gameday_id = $1',
+    `SELECT COALESCE(MAX(team_number), 0) + 1 as next_number 
+     FROM teams 
+     WHERE gameday_id = $1 AND id NOT LIKE 'gpool-%'`,
     [gameDayId]
   )
   return result.rows[0].next_number
@@ -854,7 +876,7 @@ export async function getNextPairNumber(gameDayId) {
 
 // Get pair standings (same as team standings but with pair-specific formatting)
 export async function getPairStandings(gameDayId) {
-  const teams = await getTeamsByGameDay(gameDayId)
+  const teams = (await getTeamsByGameDay(gameDayId)).filter((t) => !isGroupPoolTeamId(t.id))
   
   const standings = await Promise.all(teams.map(async (team) => {
     const members = await getTeamMembers(team.id)
@@ -902,7 +924,7 @@ export async function getUnpairedAthletes(gameDayId) {
          SELECT tm.athlete_id 
          FROM team_members tm
          INNER JOIN teams t ON tm.team_id = t.id
-         WHERE t.gameday_id = $1
+         WHERE t.gameday_id = $1 AND t.id NOT LIKE 'gpool-%'
        )
      ORDER BY a.rank ASC`,
     [gameDayId]
