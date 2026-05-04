@@ -2,6 +2,7 @@ import express from 'express'
 import { v4 as uuidv4 } from 'uuid'
 import * as db from '../database/queries.js'
 import { calculateGroupAllocation } from '../lib/groupAllocation.js'
+import { isGroupPoolTeamId } from '../lib/teamIds.js'
 
 export const teamsRoutes = express.Router()
 
@@ -116,11 +117,11 @@ teamsRoutes.post('/:id/teams/generate', async (req, res) => {
   }
 })
 
-// GET /api/gamedays/:id/teams - Get teams for a game day (excludes group-format pool rows)
+// GET /api/gamedays/:id/teams - Get teams for a game day (excludes group-format pool rows: id prefix gpool-)
 teamsRoutes.get('/:id/teams', async (req, res) => {
   try {
     const teams = (await db.getTeamsByGameDay(req.params.id)).filter(
-      (t) => t.team_kind !== 'group_pool'
+      (t) => !isGroupPoolTeamId(t.id)
     )
     
     const teamsWithMembers = await Promise.all(teams.map(async (team) => {
@@ -157,7 +158,7 @@ teamsRoutes.get('/:id/teams/standings', async (req, res) => {
   }
 })
 
-// ============= GROUP FORMAT (round-robin pools as team_kind group_pool) =============
+// ============= GROUP FORMAT (round-robin pools: teams.id prefix gpool-) =============
 
 // GET /api/gamedays/:id/groups - List group pools with members (group format only)
 teamsRoutes.get('/:id/groups', async (req, res) => {
@@ -254,8 +255,7 @@ teamsRoutes.post('/:id/groups/generate', async (req, res) => {
         gameDayId,
         teamNumber: groupNumber,
         teamName: `Group ${groupNumber}`,
-        teamColor: color,
-        teamKind: 'group_pool'
+        teamColor: color
       })
 
       for (const a of slice) {

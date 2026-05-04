@@ -1,4 +1,5 @@
 import { query } from './db.js'
+import { isGroupPoolTeamId } from '../lib/teamIds.js'
 
 // ============= ATHLETES =============
 
@@ -638,13 +639,12 @@ export async function getGameDayAthleteStats(gameDayId, athleteId) {
 // ============= TEAMS =============
 
 export async function createTeam(teamData) {
-  const { id, gameDayId, teamNumber, teamName, teamColor, teamKind } = teamData
-  const kind = teamKind || 'standard'
+  const { id, gameDayId, teamNumber, teamName, teamColor } = teamData
   const result = await query(
-    `INSERT INTO teams (id, gameday_id, team_number, team_name, team_color, team_kind)
-     VALUES ($1, $2, $3, $4, $5, $6)
+    `INSERT INTO teams (id, gameday_id, team_number, team_name, team_color)
+     VALUES ($1, $2, $3, $4, $5)
      RETURNING *`,
-    [id, gameDayId, teamNumber, teamName, teamColor, kind]
+    [id, gameDayId, teamNumber, teamName, teamColor]
   )
   return result.rows[0]
 }
@@ -662,11 +662,11 @@ export async function getTeamsByGameDay(gameDayId) {
   return result.rows
 }
 
-/** Group-format round-robin pools (one team row per physical group). */
+/** Group-format round-robin pools: rows with id prefix gpool- (see lib/teamIds.js). */
 export async function getGroupPoolTeamsByGameDay(gameDayId) {
   const result = await query(
     `SELECT * FROM teams 
-     WHERE gameday_id = $1 AND team_kind = 'group_pool' 
+     WHERE gameday_id = $1 AND id LIKE 'gpool-%' 
      ORDER BY team_number ASC`,
     [gameDayId]
   )
@@ -675,7 +675,7 @@ export async function getGroupPoolTeamsByGameDay(gameDayId) {
 
 export async function deleteGroupPoolTeamsByGameDay(gameDayId) {
   const result = await query(
-    `DELETE FROM teams WHERE gameday_id = $1 AND team_kind = 'group_pool'`,
+    `DELETE FROM teams WHERE gameday_id = $1 AND id LIKE 'gpool-%'`,
     [gameDayId]
   )
   return result.rowCount
@@ -792,7 +792,7 @@ export async function getTeamStats(teamId) {
 }
 
 export async function getTeamStandings(gameDayId) {
-  const teams = (await getTeamsByGameDay(gameDayId)).filter((t) => t.team_kind !== 'group_pool')
+  const teams = (await getTeamsByGameDay(gameDayId)).filter((t) => !isGroupPoolTeamId(t.id))
   
   const standings = await Promise.all(teams.map(async (team) => {
     const members = await getTeamMembers(team.id)
@@ -850,8 +850,7 @@ export async function createPair(gameDayId, athlete1Id, athlete2Id, pairNumber) 
     gameDayId,
     teamNumber: pairNumber,
     teamName: pairName,
-    teamColor: null, // Pairs don't use team colours
-    teamKind: 'pair'
+    teamColor: null // Pairs don't use team colours
   })
   
   // Add both athletes to the team
@@ -869,7 +868,7 @@ export async function getNextPairNumber(gameDayId) {
   const result = await query(
     `SELECT COALESCE(MAX(team_number), 0) + 1 as next_number 
      FROM teams 
-     WHERE gameday_id = $1 AND team_kind != 'group_pool'`,
+     WHERE gameday_id = $1 AND id NOT LIKE 'gpool-%'`,
     [gameDayId]
   )
   return result.rows[0].next_number
@@ -877,7 +876,7 @@ export async function getNextPairNumber(gameDayId) {
 
 // Get pair standings (same as team standings but with pair-specific formatting)
 export async function getPairStandings(gameDayId) {
-  const teams = (await getTeamsByGameDay(gameDayId)).filter((t) => t.team_kind !== 'group_pool')
+  const teams = (await getTeamsByGameDay(gameDayId)).filter((t) => !isGroupPoolTeamId(t.id))
   
   const standings = await Promise.all(teams.map(async (team) => {
     const members = await getTeamMembers(team.id)
@@ -925,7 +924,7 @@ export async function getUnpairedAthletes(gameDayId) {
          SELECT tm.athlete_id 
          FROM team_members tm
          INNER JOIN teams t ON tm.team_id = t.id
-         WHERE t.gameday_id = $1 AND COALESCE(t.team_kind, 'standard') != 'group_pool'
+         WHERE t.gameday_id = $1 AND t.id NOT LIKE 'gpool-%'
        )
      ORDER BY a.rank ASC`,
     [gameDayId]
