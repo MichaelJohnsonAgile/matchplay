@@ -10,17 +10,21 @@
     "db:init": "node database/init.js",
     "athletes:manage": "node scripts/manage-athletes.js"
   },
-  "keywords": ["pickleball", "league", "scoring"],
+  "keywords": [
+    "pickleball",
+    "league",
+    "scoring"
+  ],
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "express": "^4.18.2",
+    "@supabase/supabase-js": "^2.97.0",
     "cors": "^2.8.5",
-    "uuid": "^9.0.1",
-    "pg": "^8.11.3"
+    "express": "^4.18.2",
+    "pg": "^8.11.3",
+    "uuid": "^9.0.1"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"
   }
 }
-
