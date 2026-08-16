@@ -3,7 +3,7 @@ import { v4 as uuidv4 } from 'uuid'
 import * as db from '../database/queries.js'
 import { calculateGroupAllocation } from '../lib/groupAllocation.js'
 import { formatAthleteMpr } from '../lib/formatAthlete.js'
-import { startDivideRound, swapRound1Partners, getDivideSessionState } from '../lib/divideService.js'
+import { startDivideRound, previewDivideRound1, swapRound1Partners, getDivideSessionState } from '../lib/divideService.js'
 
 export const gameDayRoutes = express.Router()
 
@@ -546,6 +546,24 @@ gameDayRoutes.post('/:id/generate-next-round', async (req, res) => {
   } catch (error) {
     console.error('Error generating next round:', error)
     res.status(500).json({ error: 'Failed to generate next round' })
+  }
+})
+
+// POST /api/gamedays/:id/divide/preview-round-1 - Preview pro-am pairings before starting Round 1
+gameDayRoutes.post('/:id/divide/preview-round-1', async (req, res) => {
+  try {
+    const result = await previewDivideRound1(req.params.id)
+    if (result.error) {
+      return res.status(result.status || 400).json({ error: result.error })
+    }
+
+    res.json({
+      message: 'Round 1 preview generated',
+      ...result,
+    })
+  } catch (error) {
+    console.error('Error previewing divide round 1:', error)
+    res.status(500).json({ error: 'Failed to preview round 1', message: error.message })
   }
 })
 

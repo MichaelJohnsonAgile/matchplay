@@ -7,6 +7,7 @@ import {
   computeNextGameMatchups,
   sortAthletesForSessionStandings,
   buildSwapUpdates,
+  getDivideSessionState,
 } from './divideEngine.js'
 
 function athlete(id, rank, stats = {}) {
@@ -127,5 +128,29 @@ describe('divideEngine', () => {
       () => buildSwapUpdates(game1, 'a1', 'a2'),
       /different pairs/
     )
+  })
+
+  it('tracks preview vs start for round 1', () => {
+    const previewMatches = [
+      {
+        id: 'm1',
+        round: 1,
+        group: 1,
+        court: 1,
+        winner: null,
+        teamA: { players: ['a1', 'a2'], score: null },
+        teamB: { players: ['b1', 'b2'], score: null },
+      },
+    ]
+
+    const previewState = getDivideSessionState(0, previewMatches)
+    assert.equal(previewState.canPreviewRound1, false)
+    assert.equal(previewState.canStartRound1, true)
+    assert.equal(previewState.round1Preview, true)
+    assert.equal(previewState.canSwapRound1Partners, true)
+
+    const startedState = getDivideSessionState(1, previewMatches)
+    assert.equal(startedState.canStartRound1, false)
+    assert.equal(startedState.round1Preview, false)
   })
 })

@@ -205,10 +205,13 @@ export default function GameDay() {
   }
   
   // Add Matches tab
+  const divideRoundStarted =
+    !isDivideMode || (gameDay.settings.divideCurrentRound ?? 0) > 0
+
   tabs.push({
     label: 'Matches',
     content: <MatchesTab gameDayId={id} gameDay={gameDay} isAdminMode={isAdminMode} />,
-    disabled: !hasMatches
+    disabled: !hasMatches || !divideRoundStarted
   })
 
   return (

@@ -211,20 +211,24 @@ export function getDivideSessionState(divideCurrentRound, matches) {
   const round1Complete = isMacroRoundComplete(matches, 1)
   const round2Complete = isMacroRoundComplete(matches, 2)
   const round3Complete = isMacroRoundComplete(matches, 3)
+  const hasRound1Preview =
+    divideCurrentRound === 0 && matches.some((m) => m.round === 1 && m.group === 1)
 
   let nextRoundToStart = null
-  if (divideCurrentRound === 0) nextRoundToStart = 1
+  if (hasRound1Preview) nextRoundToStart = 1
   else if (divideCurrentRound === 1 && round1Complete) nextRoundToStart = 2
   else if (divideCurrentRound === 2 && round2Complete) nextRoundToStart = 3
 
   return {
     divideCurrentRound,
+    round1Preview: hasRound1Preview,
     round1Complete,
     round2Complete,
     round3Complete,
     sessionComplete: round3Complete,
     nextRoundToStart,
-    canStartRound1: divideCurrentRound === 0 && matches.length === 0,
+    canPreviewRound1: divideCurrentRound === 0 && matches.length === 0,
+    canStartRound1: hasRound1Preview,
     canStartRound2: divideCurrentRound === 1 && round1Complete,
     canStartRound3: divideCurrentRound === 2 && round2Complete,
     canSwapRound1Partners: canSwapRound1Partners(matches),

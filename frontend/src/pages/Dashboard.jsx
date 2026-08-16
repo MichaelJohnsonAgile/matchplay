@@ -889,7 +889,7 @@ function CreateGameDayForm({ onClose, onSuccess }) {
           <ul className="list-disc list-inside space-y-1 text-orange-800">
             <li>Fixed structure: 3 rounds × 3 games (9 games each)</li>
             <li>First to 9, win by 1 — ~10 minutes per game</li>
-            <li>Round 1 pro-am pairing; Rounds 2–3 from live standings</li>
+            <li>Preview Round 1 (pro-am pairs), swap if needed, then start</li>
             <li>Player count must be divisible by 4 (8, 12, 16…)</li>
           </ul>
         </div>

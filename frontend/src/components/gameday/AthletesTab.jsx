@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react'
 import Modal from '../Modal'
 import { AlertModal, ConfirmModal } from '../Alert'
 import { athleteAPI, gameDayAPI, matchAPI } from '../../services/api'
-import { formatMpr, formatMprWithReliability } from '../../lib/mpr'
 
 export default function AthletesTab({ gameDayId, gameDay, onUpdate, isAdminMode = false }) {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false)
@@ -130,10 +129,6 @@ export default function AthletesTab({ gameDayId, gameDay, onUpdate, isAdminMode 
   }
   
   const handleGenerateDraw = async () => {
-    if (isDivideMode) {
-      return handleStartDivideRound(1)
-    }
-
     if (gameDayAthletes.length < 8) {
       setAlertModal({
         isOpen: true,
@@ -195,6 +190,40 @@ export default function AthletesTab({ gameDayId, gameDay, onUpdate, isAdminMode 
     }
   }
 
+  const handlePreviewRound1 = async () => {
+    if (!athleteCountValidForDivide) {
+      setAlertModal({
+        isOpen: true,
+        title: 'Cannot Preview Round 1',
+        message: `Need a player count divisible by 4 (currently ${gameDayAthletes.length}). Add or remove athletes.`,
+        type: 'warning',
+      })
+      return
+    }
+
+    setIsGenerating(true)
+    try {
+      await gameDayAPI.previewDivideRound1(gameDayId)
+      await loadData()
+      if (onUpdate) onUpdate()
+      setAlertModal({
+        isOpen: true,
+        title: 'Round 1 Preview Ready',
+        message: 'Adjust partners with swap mode, then click Start Round 1 when ready.',
+        type: 'success',
+      })
+    } catch (error) {
+      setAlertModal({
+        isOpen: true,
+        title: 'Error',
+        message: error.message || 'Failed to preview Round 1.',
+        type: 'error',
+      })
+    } finally {
+      setIsGenerating(false)
+    }
+  }
+
   const handleStartDivideRound = async (roundNumber) => {
     if (!athleteCountValidForDivide) {
       setAlertModal({
@@ -213,9 +242,12 @@ export default function AthletesTab({ gameDayId, gameDay, onUpdate, isAdminMode 
       if (onUpdate) onUpdate()
       setAlertModal({
         isOpen: true,
-        title: `Round ${roundNumber} Started`,
-        message: `Game 1 is ready on ${response.matchesGenerated} court(s). Switch to Matches to score.`,
-        type: 'success'
+        title: roundNumber === 1 ? 'Round 1 Started' : `Round ${roundNumber} Started`,
+        message:
+          roundNumber === 1
+            ? 'Game 1 is live — switch to Matches to score.'
+            : `Game 1 is ready on ${response.matchesGenerated} court(s). Switch to Matches to score.`,
+        type: 'success',
       })
     } catch (error) {
       setAlertModal({
@@ -270,14 +302,17 @@ export default function AthletesTab({ gameDayId, gameDay, onUpdate, isAdminMode 
   const hasMatchesWithScores = matches.length > 0 && 
     matches.some(m => m.teamA?.score !== null && m.teamB?.score !== null)
 
+  const dividePreviewActive = isDivideMode && divideStatus?.round1Preview
+  const divideRoundStarted = isDivideMode && (gameDay?.settings?.divideCurrentRound ?? 0) > 0
+
   const divideSessionStarted = isDivideMode && (
-    (gameDay?.settings?.divideCurrentRound ?? 0) > 0 || matches.length > 0
+    divideRoundStarted || matches.length > 0
   )
 
   const canSwapRound1Partners = isDivideMode && divideStatus?.canSwapRound1Partners
 
   const round1PairGroups = (() => {
-    if (!canSwapRound1Partners) return []
+    if (!isDivideMode || (!dividePreviewActive && !canSwapRound1Partners)) return []
 
     return matches
       .filter((m) => m.round === 1 && m.group === 1)
@@ -370,13 +405,25 @@ export default function AthletesTab({ gameDayId, gameDay, onUpdate, isAdminMode 
   const renderDivideAdminButtons = () => {
     if (!divideStatus) return null
 
-    if (divideStatus.canStartRound1) {
+    if (divideStatus.canPreviewRound1) {
       return (
         <button
           className="bg-orange-600 text-white px-4 py-2 text-sm font-medium hover:bg-orange-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
-          onClick={() => handleStartDivideRound(1)}
-          disabled={isGenerating || !athleteCountValidForDivide}
+          onClick={handlePreviewRound1}
+          disabled={isGenerating || !athleteCountValidForDivide || swapMode}
           title={!athleteCountValidForDivide ? 'Need player count divisible by 4' : ''}
+        >
+          {isGenerating ? 'Previewing...' : 'Preview Round 1'}
+        </button>
+      )
+    }
+
+    if (divideStatus.canStartRound1) {
+      return (
+        <button
+          className="bg-[#377850] text-white px-4 py-2 text-sm font-medium hover:bg-[#2a5f3c] disabled:bg-gray-400 disabled:cursor-not-allowed"
+          onClick={() => handleStartDivideRound(1)}
+          disabled={isGenerating || swapMode}
         >
           {isGenerating ? 'Starting...' : 'Start Round 1'}
         </button>
@@ -476,9 +523,15 @@ export default function AthletesTab({ gameDayId, gameDay, onUpdate, isAdminMode 
         </div>
       </div>
 
-      {isDivideMode && canSwapRound1Partners && (
+      {dividePreviewActive && (
         <p className="text-sm text-gray-600">
-          Round 1 Game 1 is ready. Use swap mode to adjust pro-am pairs before scoring starts.
+          Round 1 preview — swap partners if needed, then click <strong>Start Round 1</strong> to begin scoring.
+        </p>
+      )}
+
+      {canSwapRound1Partners && divideRoundStarted && (
+        <p className="text-sm text-gray-600">
+          Round 1 Game 1 is live. Use swap mode to adjust partners before any scores are entered.
         </p>
       )}
 
@@ -520,13 +573,17 @@ export default function AthletesTab({ gameDayId, gameDay, onUpdate, isAdminMode 
 
       {round1PairGroups.length > 0 && (
         <div className="space-y-4">
-          <h3 className="text-lg font-semibold">Round 1 Partners</h3>
+          <h3 className="text-lg font-semibold">
+            {dividePreviewActive ? 'Round 1 Preview' : 'Round 1 Partners'}
+          </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {round1PairGroups.map((group) => (
               <div key={group.matchId} className="border-2 border-orange-200 rounded-lg overflow-hidden">
                 <div className="bg-orange-500 text-white px-4 py-3 flex justify-between items-center">
                   <span className="font-semibold">Court {group.court}</span>
-                  <span className="text-sm bg-white/20 px-2 py-0.5 rounded">Game 1</span>
+                  <span className="text-sm bg-white/20 px-2 py-0.5 rounded">
+                    {dividePreviewActive ? 'Preview' : 'Game 1'}
+                  </span>
                 </div>
                 <div className="p-4 space-y-4 bg-white">
                   {group.pairs.map((pair) => (
@@ -583,7 +640,6 @@ export default function AthletesTab({ gameDayId, gameDay, onUpdate, isAdminMode 
               <thead>
                 <tr className="border-b border-gray-200">
                   <th className="p-2 text-center font-semibold">Season Rank</th>
-                  <th className="p-2 text-center font-semibold">MPR</th>
                   <th className="p-2 text-center font-semibold">Pos</th>
                   <th className="p-2 text-left font-semibold">Athlete</th>
                   <th className="p-2 text-center font-semibold">P</th>
@@ -603,14 +659,11 @@ export default function AthletesTab({ gameDayId, gameDay, onUpdate, isAdminMode 
                     <td className="p-2">
                       <div className="skeleton h-4 w-8 mx-auto"></div>
                     </td>
-                    <td className="p-2">
+                    <td className="p-2 text-center">
                       <div className="skeleton h-4 w-8 mx-auto"></div>
                     </td>
                     <td className="p-2">
                       <div className="skeleton h-4 w-32"></div>
-                    </td>
-                    <td className="p-2 text-center">
-                      <div className="skeleton h-4 w-8 mx-auto"></div>
                     </td>
                     <td className="p-2 text-center">
                       <div className="skeleton h-4 w-8 mx-auto"></div>
@@ -632,7 +685,7 @@ export default function AthletesTab({ gameDayId, gameDay, onUpdate, isAdminMode 
                 ))
               ) : gameDayAthletes.length === 0 ? (
                 <tr>
-                  <td colSpan="10" className="p-8 text-center text-gray-500">
+                  <td colSpan={isAdminMode ? 9 : 8} className="p-8 text-center text-gray-500">
                     No players added yet.
                   </td>
                 </tr>
@@ -653,9 +706,6 @@ export default function AthletesTab({ gameDayId, gameDay, onUpdate, isAdminMode 
                 }).map((athlete, index) => (
                   <tr key={athlete.id} className="border-b border-gray-200">
                     <td className="p-2 text-center">{athlete.rank}</td>
-                    <td className="p-2 text-center font-medium text-[#377850]" title={isAdminMode ? formatMprWithReliability(athlete) : undefined}>
-                      {isAdminMode ? formatMprWithReliability(athlete) : formatMpr(athlete)}
-                    </td>
                     <td className="p-2 text-center font-semibold">{index + 1}</td>
                     <td className="p-2">{athlete.name}</td>
                     <td className="p-2 text-center">{athlete.stats.matchesPlayed}</td>

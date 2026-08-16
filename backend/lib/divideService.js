@@ -58,6 +58,58 @@ async function createMatchesFromCourtAssignments(gameDayId, macroRound, gameNumb
   return created
 }
 
+async function buildRoundOnePairings(gameDayId) {
+  const athletes = await db.getGameDayAthletes(gameDayId)
+  if (athletes.length < 4 || athletes.length % 4 !== 0) {
+    return {
+      error: `Need a player count divisible by 4 (currently ${athletes.length})`,
+      status: 400,
+    }
+  }
+
+  await db.syncAthleteRanks()
+  const sortedForPairing = [...athletes].sort((a, b) => a.rank - b.rank)
+  const pairs = pairProAm(sortedForPairing)
+  const courtAssignments = seedPairsToCourts(pairs)
+  const created = await createMatchesFromCourtAssignments(gameDayId, 1, 1, courtAssignments)
+
+  return { created, athleteCount: athletes.length }
+}
+
+export async function previewDivideRound1(gameDayId) {
+  const gameDay = await db.getGameDayById(gameDayId)
+  if (!gameDay) {
+    return { error: 'Game day not found', status: 404 }
+  }
+  if (gameDay.format !== 'divide') {
+    return { error: 'This action is only for Divide & Conquer format', status: 400 }
+  }
+
+  const matches = await db.getMatchesByGameDay(gameDayId)
+  const session = getDivideSessionState(gameDay.divide_current_round, matches)
+
+  if (!session.canPreviewRound1) {
+    return {
+      error: 'Round 1 preview is only available before the session has started',
+      status: 400,
+    }
+  }
+
+  const result = await buildRoundOnePairings(gameDayId)
+  if (result.error) {
+    return result
+  }
+
+  return {
+    success: true,
+    preview: true,
+    round: 1,
+    game: 1,
+    matchesGenerated: result.created.length,
+    matches: result.created,
+  }
+}
+
 export async function startDivideRound(gameDayId, roundNumber) {
   if (roundNumber < 1 || roundNumber > MACRO_ROUNDS) {
     return { error: 'Invalid round number', status: 400 }
@@ -74,9 +126,33 @@ export async function startDivideRound(gameDayId, roundNumber) {
   const matches = await db.getMatchesByGameDay(gameDayId)
   const session = getDivideSessionState(gameDay.divide_current_round, matches)
 
-  if (roundNumber === 1 && !session.canStartRound1) {
-    return { error: 'Round 1 has already started or matches already exist', status: 400 }
+  if (roundNumber === 1) {
+    if (!session.canStartRound1) {
+      return {
+        error: session.round1Preview
+          ? 'Round 1 has already started'
+          : 'Preview Round 1 first, then start when pairings are ready',
+        status: 400,
+      }
+    }
+
+    await db.updateGameDay(gameDayId, {
+      divideCurrentRound: 1,
+      status: 'in-progress',
+    })
+
+    const game1Matches = matches.filter((m) => m.round === 1 && m.group === 1)
+
+    return {
+      success: true,
+      round: 1,
+      game: 1,
+      activated: true,
+      matchesGenerated: game1Matches.length,
+      matches: game1Matches,
+    }
   }
+
   if (roundNumber === 2 && !session.canStartRound2) {
     return { error: 'Complete all Round 1 games before starting Round 2', status: 400 }
   }
@@ -94,15 +170,10 @@ export async function startDivideRound(gameDayId, roundNumber) {
 
   await db.syncAthleteRanks()
 
-  let sortedForPairing
-  if (roundNumber === 1) {
-    sortedForPairing = [...athletes].sort((a, b) => a.rank - b.rank)
-  } else {
-    const withStats = await loadAthletesWithSessionStats(gameDayId)
-    sortedForPairing = sortAthletesForSessionStandings(withStats)
-  }
+  const withStats = await loadAthletesWithSessionStats(gameDayId)
+  const sortedForPairing = sortAthletesForSessionStandings(withStats)
 
-  const pairs = roundNumber === 1 ? pairProAm(sortedForPairing) : pairEvenMatch(sortedForPairing)
+  const pairs = pairEvenMatch(sortedForPairing)
   const courtAssignments = seedPairsToCourts(pairs)
   const created = await createMatchesFromCourtAssignments(gameDayId, roundNumber, 1, courtAssignments)
 
@@ -123,6 +194,10 @@ export async function startDivideRound(gameDayId, roundNumber) {
 export async function tryAdvanceDivideAfterScore(gameDayId, completedMatch) {
   const gameDay = await db.getGameDayById(gameDayId)
   if (!gameDay || gameDay.format !== 'divide') {
+    return { advanced: false }
+  }
+
+  if ((gameDay.divide_current_round ?? 0) < 1) {
     return { advanced: false }
   }
 
@@ -223,4 +298,4 @@ export async function swapRound1Partners(gameDayId, player1Id, player2Id) {
   }
 }
 
-export { getDivideSessionState, MACRO_ROUNDS, GAMES_PER_ROUND, canSwapRound1Partners }
+export { getDivideSessionState, MACRO_ROUNDS, GAMES_PER_ROUND, canSwapRound1Partners, previewDivideRound1 }

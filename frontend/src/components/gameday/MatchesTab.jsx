@@ -495,7 +495,9 @@ export default function MatchesTab({ gameDayId, gameDay, isAdminMode = false }) 
           <p className="text-lg font-semibold mb-2">Draw Not Generated</p>
           <p className="text-sm">
             {isDivideMode
-              ? 'Start Round 1 from the Athletes tab to begin the session.'
+              ? (gameDay?.settings?.divideCurrentRound ?? 0) > 0
+                ? 'Matches will appear here once Round 1 has started.'
+                : 'Preview Round 1 on the Athletes tab, then start when pairings are ready.'
               : gameDay?.settings?.format === 'teams' 
               ? 'Generate teams first, then generate the match draw from the Teams tab.'
               : 'Generate the match draw from the Athletes tab to view matches.'}

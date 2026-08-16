@@ -26,6 +26,16 @@ matchRoutes.put('/:id/score', async (req, res) => {
     if (!match) {
       return res.status(404).json({ error: 'Match not found' })
     }
+
+    const gameDayForScore = await db.getGameDayById(match.gameDayId)
+    if (
+      gameDayForScore?.format === 'divide' &&
+      (gameDayForScore.divide_current_round ?? 0) < 1
+    ) {
+      return res.status(400).json({
+        error: 'Start Round 1 before entering scores',
+      })
+    }
     
     const { teamA, teamB } = req.body
     

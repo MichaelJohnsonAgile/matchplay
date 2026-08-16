@@ -148,6 +148,12 @@ export const gameDayAPI = {
     })
   },
 
+  async previewDivideRound1(id) {
+    return apiRequest(`/gamedays/${id}/divide/preview-round-1`, {
+      method: 'POST',
+    })
+  },
+
   async getDivideStatus(id) {
     return apiRequest(`/gamedays/${id}/divide/status`)
   },
