@@ -831,9 +831,11 @@ export default function MatchesTab({ gameDayId, gameDay, isAdminMode = false, on
                     className="border border-gray-200 rounded p-3"
                   >
                     <div className="text-xs text-gray-600 mb-3 flex justify-between items-center">
-                      <span className="flex items-center gap-2">
+                      <span className="flex items-center gap-2 flex-wrap">
                         {isDivideMode && match.court && (
-                          <span className="font-semibold text-orange-700">Court {match.court}</span>
+                          <span className="px-2 py-0.5 rounded text-xs font-semibold bg-orange-100 text-orange-800">
+                            Court {match.court}
+                          </span>
                         )}
                         Match {index + 1} <span className="text-gray-400">({match.id.substring(match.id.length - 8)})</span>
                       </span>

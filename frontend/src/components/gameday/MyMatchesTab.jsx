@@ -18,9 +18,7 @@ function compareMatches(a, b) {
 function getMatchLabel(match, gameDay) {
   const format = gameDay?.settings?.format
   if (format === 'divide') {
-    const parts = [`Round ${match.round}`, `Game ${match.group}`]
-    if (match.court) parts.push(`Court ${match.court}`)
-    return parts.join(' · ')
+    return `Round ${match.round} · Game ${match.group}`
   }
   if (format === 'group') {
     return `Round ${match.round} · Group ${match.group}`
@@ -42,23 +40,101 @@ function athleteInMatch(match, athleteId) {
   )
 }
 
-function buildDivideMatchSlots(myMatches) {
-  const byKey = new Map()
-  for (const match of myMatches) {
-    byKey.set(`${match.round}-${match.group}`, match)
+function getPartnerId(match, athleteId) {
+  if (!athleteInMatch(match, athleteId)) return null
+  const onTeamA = match.teamA.players.includes(athleteId)
+  const teammates = onTeamA ? match.teamA.players : match.teamB.players
+  return teammates.find((id) => id !== athleteId) ?? null
+}
+
+function computeGroupStats(groupMatches, athleteId) {
+  const stats = { wins: 0, losses: 0, upcoming: 0, pointsFor: 0, pointsAgainst: 0 }
+
+  for (const match of groupMatches) {
+    const onTeamA = match.teamA.players.includes(athleteId)
+    const myTeam = onTeamA ? match.teamA : match.teamB
+    const oppTeam = onTeamA ? match.teamB : match.teamA
+
+    if (!match.winner) {
+      stats.upcoming += 1
+      continue
+    }
+
+    stats.pointsFor += myTeam.score ?? 0
+    stats.pointsAgainst += oppTeam.score ?? 0
+    const won = match.winner === (onTeamA ? 'teamA' : 'teamB')
+    if (won) stats.wins += 1
+    else stats.losses += 1
   }
 
-  const slots = []
-  for (let round = 1; round <= DIVIDE_MACRO_ROUNDS; round++) {
-    for (let game = 1; game <= DIVIDE_GAMES_PER_ROUND; game++) {
-      slots.push({
+  return stats
+}
+
+function buildPartnerGroups(myMatches, athleteId, isDivideMode) {
+  if (isDivideMode) {
+    const groups = []
+
+    for (let round = 1; round <= DIVIDE_MACRO_ROUNDS; round++) {
+      const roundMatches = myMatches.filter((m) => m.round === round).sort(compareMatches)
+      const partnerId = roundMatches.length > 0 ? getPartnerId(roundMatches[0], athleteId) : null
+      const groupKey = partnerId ? `partner-${partnerId}-r${round}` : `round-${round}-pending`
+
+      const items = []
+      for (let game = 1; game <= DIVIDE_GAMES_PER_ROUND; game++) {
+        const match = roundMatches.find((m) => m.group === game) ?? null
+        items.push(
+          match
+            ? { type: 'match', match }
+            : { type: 'blank', round, game }
+        )
+      }
+
+      groups.push({
+        groupKey,
+        partnerId,
         round,
-        game,
-        match: byKey.get(`${round}-${game}`) || null,
+        matches: roundMatches,
+        items,
+        stats: computeGroupStats(roundMatches, athleteId),
       })
     }
+
+    return groups
   }
-  return slots
+
+  const byPartner = new Map()
+  const order = []
+
+  for (const match of [...myMatches].sort(compareMatches)) {
+    const partnerId = getPartnerId(match, athleteId)
+    if (!partnerId) continue
+
+    if (!byPartner.has(partnerId)) {
+      byPartner.set(partnerId, [])
+      order.push(partnerId)
+    }
+    byPartner.get(partnerId).push(match)
+  }
+
+  return order.map((partnerId) => {
+    const partnerMatches = byPartner.get(partnerId)
+    return {
+      groupKey: `partner-${partnerId}`,
+      partnerId,
+      round: null,
+      matches: partnerMatches,
+      items: partnerMatches.map((match) => ({ type: 'match', match })),
+      stats: computeGroupStats(partnerMatches, athleteId),
+    }
+  })
+}
+
+function pickDefaultExpandedGroupKey(groups) {
+  const active = groups.find(
+    (g) => g.stats.upcoming > 0 || g.items.some((item) => item.type === 'blank')
+  )
+  if (active) return active.groupKey
+  return groups[groups.length - 1]?.groupKey ?? null
 }
 
 function BlankMatchSlot({ round, game }) {
@@ -115,20 +191,27 @@ function MatchCard({ match, athleteId, athletes, gameDay, onScoreClick }) {
     <>
       <div className="text-xs text-gray-600 mb-3 flex justify-between items-start gap-2 flex-wrap">
         <span className="font-medium text-gray-800">{getMatchLabel(match, gameDay)}</span>
-        {hasScores && (
-          <span
-            className={`px-2 py-0.5 rounded text-xs font-semibold ${
-              myWins ? 'bg-green-100 text-green-800' : myLosses ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-700'
-            }`}
-          >
-            {myWins ? 'Win' : myLosses ? 'Loss' : 'Played'}
-          </span>
-        )}
-        {!hasScores && (
-          <span className="px-2 py-0.5 rounded text-xs font-semibold bg-amber-100 text-amber-800">
-            Upcoming
-          </span>
-        )}
+        <div className="flex items-center gap-2 flex-wrap">
+          {gameDay?.settings?.format === 'divide' && match.court && (
+            <span className="px-2 py-0.5 rounded text-xs font-semibold bg-orange-100 text-orange-800">
+              Court {match.court}
+            </span>
+          )}
+          {hasScores && (
+            <span
+              className={`px-2 py-0.5 rounded text-xs font-semibold ${
+                myWins ? 'bg-green-100 text-green-800' : myLosses ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-700'
+              }`}
+            >
+              {myWins ? 'Win' : myLosses ? 'Loss' : 'Played'}
+            </span>
+          )}
+          {!hasScores && (
+            <span className="px-2 py-0.5 rounded text-xs font-semibold bg-amber-100 text-amber-800">
+              Upcoming
+            </span>
+          )}
+        </div>
       </div>
 
       <div className="space-y-2 text-sm">
@@ -188,6 +271,89 @@ function MatchCard({ match, athleteId, athletes, gameDay, onScoreClick }) {
   )
 }
 
+function PartnerGroup({
+  group,
+  partnerName,
+  isDivideMode,
+  expanded,
+  onToggle,
+  athleteId,
+  athletes,
+  gameDay,
+  onScoreClick,
+}) {
+  const { stats } = group
+  const played = stats.wins + stats.losses
+  const diff = stats.pointsFor - stats.pointsAgainst
+  const winPct = played > 0 ? Math.round((stats.wins / played) * 100) : null
+
+  const title = partnerName
+    ? partnerName
+    : isDivideMode && group.round
+      ? `Round ${group.round}`
+      : 'Partner'
+
+  return (
+    <div className="border border-gray-200 rounded overflow-hidden">
+      <button
+        type="button"
+        onClick={onToggle}
+        className="w-full flex items-center justify-between gap-3 p-3 text-left bg-gray-50 hover:bg-gray-100 transition-colors"
+        aria-expanded={expanded}
+      >
+        <div className="min-w-0">
+          <p className="font-semibold text-gray-900 truncate">{title}</p>
+          <p className="text-xs text-gray-600 mt-0.5">
+            <span className="text-green-700 font-medium">{stats.wins}W</span>
+            {' · '}
+            <span className="text-red-700 font-medium">{stats.losses}L</span>
+            {played > 0 && (
+              <>
+                {' · '}
+                <span className={diff > 0 ? 'text-green-600' : diff < 0 ? 'text-red-600' : ''}>
+                  {diff > 0 ? '+' : ''}{diff} pts
+                </span>
+                {winPct !== null && <> · {winPct}% win</>}
+              </>
+            )}
+            {stats.upcoming > 0 && (
+              <span className="text-amber-700"> · {stats.upcoming} upcoming</span>
+            )}
+          </p>
+        </div>
+        <svg
+          className={`w-5 h-5 text-gray-500 flex-shrink-0 transition-transform ${expanded ? 'rotate-180' : ''}`}
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+
+      {expanded && (
+        <div className="p-3 space-y-3 border-t border-gray-200 bg-white">
+          {group.items.map((item) =>
+            item.type === 'match' ? (
+              <MatchCard
+                key={item.match.id}
+                match={item.match}
+                athleteId={athleteId}
+                athletes={athletes}
+                gameDay={gameDay}
+                onScoreClick={onScoreClick}
+              />
+            ) : (
+              <BlankMatchSlot key={`blank-${item.round}-${item.game}`} round={item.round} game={item.game} />
+            )
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function MyMatchesTab({ gameDayId, gameDay, onUpdate }) {
   const [roster, setRoster] = useState([])
   const [matches, setMatches] = useState([])
@@ -198,6 +364,7 @@ export default function MyMatchesTab({ gameDayId, gameDay, onUpdate }) {
   const [selectedMatch, setSelectedMatch] = useState(null)
   const [tempScores, setTempScores] = useState({ teamA: '', teamB: '' })
   const [alertModal, setAlertModal] = useState({ isOpen: false, title: '', message: '', type: 'info' })
+  const [expandedGroups, setExpandedGroups] = useState(new Set())
 
   const isDivideMode = gameDay?.settings?.format === 'divide'
 
@@ -251,28 +418,37 @@ export default function MyMatchesTab({ gameDayId, gameDay, onUpdate }) {
     return matches.filter((m) => athleteInMatch(m, selectedAthleteId)).sort(compareMatches)
   }, [matches, selectedAthleteId])
 
-  const divideSlots = useMemo(() => {
-    if (!isDivideMode || !selectedAthleteId) return []
-    return buildDivideMatchSlots(myMatches)
-  }, [isDivideMode, selectedAthleteId, myMatches])
+  const partnerGroups = useMemo(() => {
+    if (!selectedAthleteId) return []
+    return buildPartnerGroups(myMatches, selectedAthleteId, isDivideMode)
+  }, [myMatches, selectedAthleteId, isDivideMode])
 
-  const { upcomingMatches, completedMatches } = useMemo(() => {
-    const upcoming = []
-    const completed = []
-    for (const match of myMatches) {
-      if (match.winner) {
-        completed.push(match)
-      } else {
-        upcoming.push(match)
-      }
+  const defaultExpandedKey = useMemo(
+    () => pickDefaultExpandedGroupKey(partnerGroups),
+    [partnerGroups]
+  )
+
+  useEffect(() => {
+    if (defaultExpandedKey) {
+      setExpandedGroups(new Set([defaultExpandedKey]))
+    } else {
+      setExpandedGroups(new Set())
     }
-    return { upcomingMatches: upcoming, completedMatches: [...completed].reverse() }
-  }, [myMatches])
+  }, [selectedAthleteId, defaultExpandedKey])
 
   const sortedRoster = useMemo(
     () => [...roster].sort((a, b) => a.name.localeCompare(b.name)),
     [roster]
   )
+
+  const toggleGroup = (groupKey) => {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev)
+      if (next.has(groupKey)) next.delete(groupKey)
+      else next.add(groupKey)
+      return next
+    })
+  }
 
   const openScoreModal = (match) => {
     setSelectedMatch(match)
@@ -336,6 +512,8 @@ export default function MyMatchesTab({ gameDayId, gameDay, onUpdate }) {
     return `Round ${match.round}`
   }
 
+  const hasAnyScheduledMatches = partnerGroups.some((g) => g.matches.length > 0)
+
   if (isLoading) {
     return (
       <div className="space-y-4">
@@ -379,75 +557,29 @@ export default function MyMatchesTab({ gameDayId, gameDay, onUpdate }) {
         </div>
       )}
 
-      {selectedAthleteId && isDivideMode && (
-        <div className="space-y-3">
-          {divideSlots.map(({ round, game, match }) =>
-            match ? (
-              <MatchCard
-                key={`${round}-${game}`}
-                match={match}
-                athleteId={selectedAthleteId}
-                athletes={athletes}
-                gameDay={gameDay}
-                onScoreClick={openScoreModal}
-              />
-            ) : (
-              <BlankMatchSlot key={`${round}-${game}`} round={round} game={game} />
-            )
-          )}
-        </div>
-      )}
-
-      {selectedAthleteId && !isDivideMode && myMatches.length === 0 && (
+      {selectedAthleteId && !hasAnyScheduledMatches && !isDivideMode && (
         <div className="border border-gray-200 p-8 text-center rounded">
           <p className="text-gray-600">You are not scheduled in any matches yet.</p>
         </div>
       )}
 
-      {selectedAthleteId && !isDivideMode && upcomingMatches.length > 0 && (
-        <section>
-          <h3 className="text-lg font-semibold mb-3">
-            Upcoming ({upcomingMatches.length})
-          </h3>
-          <div className="space-y-3">
-            {upcomingMatches.map((match) => (
-              <MatchCard
-                key={match.id}
-                match={match}
-                athleteId={selectedAthleteId}
-                athletes={athletes}
-                gameDay={gameDay}
-                onScoreClick={openScoreModal}
-              />
-            ))}
-          </div>
-        </section>
-      )}
-
-      {selectedAthleteId && !isDivideMode && completedMatches.length > 0 && (
-        <section>
-          <h3 className="text-lg font-semibold mb-3">
-            Previous ({completedMatches.length})
-          </h3>
-          <div className="space-y-3">
-            {completedMatches.map((match) => (
-              <MatchCard
-                key={match.id}
-                match={match}
-                athleteId={selectedAthleteId}
-                athletes={athletes}
-                gameDay={gameDay}
-                onScoreClick={openScoreModal}
-              />
-            ))}
-          </div>
-        </section>
-      )}
-
-      {selectedAthleteId && !isDivideMode && myMatches.length > 0 && upcomingMatches.length === 0 && completedMatches.length > 0 && (
-        <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded p-3">
-          All your matches are complete for this session.
-        </p>
+      {selectedAthleteId && (hasAnyScheduledMatches || isDivideMode) && (
+        <div className="space-y-3">
+          {partnerGroups.map((group) => (
+            <PartnerGroup
+              key={group.groupKey}
+              group={group}
+              partnerName={group.partnerId ? getAthleteName(group.partnerId) : null}
+              isDivideMode={isDivideMode}
+              expanded={expandedGroups.has(group.groupKey)}
+              onToggle={() => toggleGroup(group.groupKey)}
+              athleteId={selectedAthleteId}
+              athletes={athletes}
+              gameDay={gameDay}
+              onScoreClick={openScoreModal}
+            />
+          ))}
+        </div>
       )}
 
       <Modal isOpen={isModalOpen} onClose={closeScoreModal}>
