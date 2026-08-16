@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react'
 import Modal from '../Modal'
+import CreateAthleteForm from '../CreateAthleteForm'
 import { AlertModal, ConfirmModal } from '../Alert'
 import { athleteAPI, gameDayAPI, matchAPI } from '../../services/api'
 
 export default function AthletesTab({ gameDayId, gameDay, onUpdate, isAdminMode = false }) {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false)
+  const [isCreateAthleteModalOpen, setIsCreateAthleteModalOpen] = useState(false)
   const [selectedAthletes, setSelectedAthletes] = useState([])
   const [isGenerating, setIsGenerating] = useState(false)
   const [allAthletes, setAllAthletes] = useState([])
@@ -26,7 +28,7 @@ export default function AthletesTab({ gameDayId, gameDay, onUpdate, isAdminMode 
   
   useEffect(() => {
     loadData()
-  }, [gameDayId])
+  }, [gameDayId, gameDay?.settings?.divideCurrentRound])
 
   const loadData = async () => {
     try {
@@ -82,6 +84,16 @@ export default function AthletesTab({ gameDayId, gameDay, onUpdate, isAdminMode 
     }
   }
   
+  const handleAthleteCreated = async (newAthlete) => {
+    const all = await athleteAPI.getAll()
+    setAllAthletes(all)
+    if (newAthlete?.id) {
+      setSelectedAthletes((prev) =>
+        prev.includes(newAthlete.id) ? prev : [...prev, newAthlete.id]
+      )
+    }
+  }
+
   const handleToggleAthlete = (athleteId) => {
     setSelectedAthletes(prev => 
       prev.includes(athleteId) 
@@ -437,7 +449,7 @@ export default function AthletesTab({ gameDayId, gameDay, onUpdate, isAdminMode 
           onClick={() => handleStartDivideRound(2)}
           disabled={isGenerating}
         >
-          {isGenerating ? 'Starting...' : 'Start Round 2'}
+          {isGenerating ? 'Generating...' : 'Generate Round 2'}
         </button>
       )
     }
@@ -449,7 +461,7 @@ export default function AthletesTab({ gameDayId, gameDay, onUpdate, isAdminMode 
           onClick={() => handleStartDivideRound(3)}
           disabled={isGenerating}
         >
-          {isGenerating ? 'Starting...' : 'Start Round 3'}
+          {isGenerating ? 'Generating...' : 'Generate Round 3'}
         </button>
       )
     }
@@ -760,14 +772,21 @@ export default function AthletesTab({ gameDayId, gameDay, onUpdate, isAdminMode 
         <h3 className="text-xl font-semibold mb-4">Join This Game Day</h3>
         
         {/* Search bar */}
-        <div className="mb-4">
+        <div className="mb-4 flex gap-2">
           <input
             type="text"
             placeholder="Search athletes..."
             value={addModalSearch}
             onChange={(e) => setAddModalSearch(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-[#377850] focus:border-transparent"
+            className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-[#377850] focus:border-transparent"
           />
+          <button
+            type="button"
+            onClick={() => setIsCreateAthleteModalOpen(true)}
+            className="flex-shrink-0 border border-[#377850] text-[#377850] px-3 py-2 text-sm font-medium hover:bg-green-50 rounded whitespace-nowrap"
+          >
+            Add Athlete
+          </button>
         </div>
         
         <div className="space-y-3 max-h-96 overflow-y-auto mb-4">
@@ -819,6 +838,17 @@ export default function AthletesTab({ gameDayId, gameDay, onUpdate, isAdminMode 
             {selectedAthletes.length > 0 ? `Join (${selectedAthletes.length})` : 'Join'}
           </button>
         </div>
+      </Modal>
+
+      <Modal
+        isOpen={isCreateAthleteModalOpen}
+        onClose={() => setIsCreateAthleteModalOpen(false)}
+        title="Add Athlete"
+      >
+        <CreateAthleteForm
+          onClose={() => setIsCreateAthleteModalOpen(false)}
+          onSuccess={handleAthleteCreated}
+        />
       </Modal>
       
       {/* Alert Modal */}

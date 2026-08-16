@@ -2,7 +2,7 @@ import express from 'express'
 import { v4 as uuidv4 } from 'uuid'
 import * as db from '../database/queries.js'
 import { calculateGroupAllocation } from '../lib/groupAllocation.js'
-import { formatAthleteMpr } from '../lib/formatAthlete.js'
+import { formatAthlete } from '../lib/formatAthlete.js'
 import { startDivideRound, previewDivideRound1, swapRound1Partners, getDivideSessionState } from '../lib/divideService.js'
 
 export const gameDayRoutes = express.Router()
@@ -190,7 +190,7 @@ gameDayRoutes.get('/:id/athletes', async (req, res) => {
       athletes.map(async (athlete) => {
         const stats = await db.getGameDayAthleteStats(req.params.id, athlete.id)
         return {
-          ...formatAthleteMpr(athlete),
+          ...formatAthlete(athlete),
           stats
         }
       })

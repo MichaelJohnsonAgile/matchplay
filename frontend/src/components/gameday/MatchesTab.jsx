@@ -3,7 +3,6 @@ import { SkeletonText } from '../Skeleton'
 import Modal from '../Modal'
 import { AlertModal } from '../Alert'
 import { matchAPI, athleteAPI, gameDayAPI, teamsAPI } from '../../services/api'
-import { getMatchQuality, formatRatingDelta } from '../../lib/mpr'
 
 // Team colour definitions for visual indicators
 const TEAM_COLOR_CLASSES = {
@@ -13,7 +12,7 @@ const TEAM_COLOR_CLASSES = {
   yellow: { bg: 'bg-yellow-500', text: 'text-yellow-600', border: 'border-yellow-400' }
 }
 
-export default function MatchesTab({ gameDayId, gameDay, isAdminMode = false }) {
+export default function MatchesTab({ gameDayId, gameDay, isAdminMode = false, onUpdate }) {
   const [selectedRound, setSelectedRound] = useState('1')
   const [selectedGroup, setSelectedGroup] = useState('1')
   const [selectedGame, setSelectedGame] = useState('1')
@@ -21,6 +20,7 @@ export default function MatchesTab({ gameDayId, gameDay, isAdminMode = false }) 
   const [athletes, setAthletes] = useState({}) // Map of athleteId -> athlete object
   const [athleteTeamMap, setAthleteTeamMap] = useState({}) // Map of athleteId -> { teamName, teamColor }
   const [teams, setTeams] = useState([]) // Team data for legend
+  const [divideStatus, setDivideStatus] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState(null)
   const [isGeneratingRound, setIsGeneratingRound] = useState(false)
@@ -67,6 +67,17 @@ export default function MatchesTab({ gameDayId, gameDay, isAdminMode = false }) 
       if (isTeams) console.log('Loaded teams:', teamsData)
       
       setMatches(matchesData)
+      
+      if (gameDay?.settings?.format === 'divide') {
+        try {
+          const status = await gameDayAPI.getDivideStatus(gameDayId)
+          setDivideStatus(status)
+        } catch {
+          setDivideStatus(null)
+        }
+      } else {
+        setDivideStatus(null)
+      }
       
       // Create a map for quick athlete lookup
       const athleteMap = {}
@@ -404,26 +415,20 @@ export default function MatchesTab({ gameDayId, gameDay, isAdminMode = false }) 
       
       await loadData()
       closeModal()
+      if (onUpdate) onUpdate()
 
       let message = 'Score saved successfully'
-      const updates = response?.ratingUpdates
-      if (updates && updates.length > 0) {
-        const deltaLines = updates
-          .map((u) => `${u.name}: ${formatRatingDelta(u.delta)}`)
-          .join('\n')
-        message = `Score saved. MPR updated:\n${deltaLines}`
-      }
 
       if (response?.divideAdvance?.advanced) {
         const nextGame = response.divideAdvance.game
         setSelectedGame(String(nextGame))
         setSelectedRound(String(response.divideAdvance.round))
-        message += `\n\nGame ${nextGame} is ready — opponents updated from the court ladder.`
+        message = `Score saved. Game ${nextGame} is ready — opponents updated from the court ladder.`
       }
 
       setAlertModal({
         isOpen: true,
-        title: updates?.length ? 'MPR Updated' : 'Success',
+        title: 'Success',
         message,
         type: 'success'
       })
@@ -449,6 +454,36 @@ export default function MatchesTab({ gameDayId, gameDay, isAdminMode = false }) 
     currentRoundMatches.every(m => m.teamA.score !== null && m.teamB.score !== null)
   
   const canGenerateNextRound = hasMoreRounds && allCurrentRoundComplete
+
+  const nextDivideRound =
+    divideStatus?.canStartRound2 ? 2 : divideStatus?.canStartRound3 ? 3 : null
+
+  const handleStartDivideRound = async (roundNumber) => {
+    setIsGeneratingRound(true)
+    try {
+      const response = await gameDayAPI.startDivideRound(gameDayId, roundNumber)
+      await loadData()
+      if (onUpdate) onUpdate()
+      setSelectedRound(String(roundNumber))
+      setSelectedGame('1')
+      setAlertModal({
+        isOpen: true,
+        title: `Round ${roundNumber} Generated`,
+        message: `Game 1 is ready on ${response.matchesGenerated} court(s).`,
+        type: 'success',
+      })
+    } catch (err) {
+      console.error('Failed to start divide round:', err)
+      setAlertModal({
+        isOpen: true,
+        title: 'Error',
+        message: err.message || 'Failed to generate round. Please try again.',
+        type: 'error',
+      })
+    } finally {
+      setIsGeneratingRound(false)
+    }
+  }
   
   const handleGenerateNextRound = async () => {
     setIsGeneratingRound(true)
@@ -600,7 +635,7 @@ export default function MatchesTab({ gameDayId, gameDay, isAdminMode = false }) 
         </div>
       )}
       
-      {/* Generate Next Round Button - only for group mode */}
+      {/* Generate Next Round — group mode */}
       {canGenerateNextRound && !isTeamsMode && !isDivideMode && (
         <div className="bg-green-50 border border-green-500 p-4 rounded">
           <div className="flex items-center justify-between gap-4 flex-wrap">
@@ -622,6 +657,33 @@ export default function MatchesTab({ gameDayId, gameDay, isAdminMode = false }) 
                 className="bg-green-600 text-white px-6 py-3 text-sm font-medium hover:bg-green-700 disabled:bg-gray-400 whitespace-nowrap"
               >
                 {isGeneratingRound ? 'Generating...' : `Generate Round ${currentMaxRound + 1}`}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Generate next macro round — Divide & Conquer */}
+      {isDivideMode && nextDivideRound && (
+        <div className="bg-green-50 border border-green-500 p-4 rounded">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div>
+              <p className="font-semibold text-green-800 mb-1">
+                Round {nextDivideRound - 1} Complete!
+              </p>
+              <p className="text-sm text-green-700">
+                {isAdminMode
+                  ? `All games are finished. Generate Round ${nextDivideRound} to continue.`
+                  : `All games are finished. Round ${nextDivideRound} will be generated by an admin.`}
+              </p>
+            </div>
+            {isAdminMode && (
+              <button
+                onClick={() => handleStartDivideRound(nextDivideRound)}
+                disabled={isGeneratingRound}
+                className="bg-green-600 text-white px-6 py-3 text-sm font-medium hover:bg-green-700 disabled:bg-gray-400 whitespace-nowrap"
+              >
+                {isGeneratingRound ? 'Generating...' : `Generate Round ${nextDivideRound}`}
               </button>
             )}
           </div>
@@ -762,7 +824,6 @@ export default function MatchesTab({ gameDayId, gameDay, isAdminMode = false }) 
                 const hasScores = match.teamA.score !== null && match.teamB.score !== null
                 const teamAWins = hasScores && match.winner === 'teamA'
                 const teamBWins = hasScores && match.winner === 'teamB'
-                const matchQuality = hasScores ? getMatchQuality(match, athletes) : null
                 
                 return (
                   <div 
@@ -775,11 +836,6 @@ export default function MatchesTab({ gameDayId, gameDay, isAdminMode = false }) 
                           <span className="font-semibold text-orange-700">Court {match.court}</span>
                         )}
                         Match {index + 1} <span className="text-gray-400">({match.id.substring(match.id.length - 8)})</span>
-                        {matchQuality && (
-                          <span className={`px-2 py-0.5 rounded text-xs font-medium ${matchQuality.className}`}>
-                            {matchQuality.label}
-                          </span>
-                        )}
                       </span>
                       <div className="flex items-center gap-2">
                         {match.bye && (

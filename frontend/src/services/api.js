@@ -274,11 +274,6 @@ export const leaderboardAPI = {
   async getOverall() {
     return apiRequest('/leaderboard')
   },
-
-  // Get MPR skill leaderboard
-  async getMpr() {
-    return apiRequest('/leaderboard/mpr')
-  },
   
   // Get leaderboard for specific date range
   async getForDateRange(startDate, endDate) {
@@ -385,13 +380,6 @@ export const teamsAPI = {
     return apiRequest(`/gamedays/${gameDayId}/pairs/auto-allocate`, {
       method: 'POST',
     })
-  },
-}
-
-// Admin MPR APIs
-export const mprAPI = {
-  async rebackfill() {
-    return apiRequest('/admin/mpr/rebackfill', { method: 'POST' })
   },
 }
 

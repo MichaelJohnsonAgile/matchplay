@@ -10,10 +10,6 @@
     "test": "node --test lib/**/*.test.js",
     "db:init": "node database/init.js",
     "db:migrate": "node database/run-migration.js",
-    "mpr:backfill": "node scripts/backfill-mpr.js",
-    "mpr:export": "node scripts/export-mpr.js",
-    "mpr:test-backfill": "node scripts/test-backfill-mpr.js",
-    "mpr:simulate": "node scripts/simulate-mpr-movement.js",
     "athletes:manage": "node scripts/manage-athletes.js"
   },
   "keywords": [

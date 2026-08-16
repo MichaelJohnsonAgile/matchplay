@@ -13,14 +13,3 @@ leaderboardRoutes.get('/', async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch leaderboard' })
   }
 })
-
-// GET /api/leaderboard/mpr - MPR skill leaderboard
-leaderboardRoutes.get('/mpr', async (req, res) => {
-  try {
-    const mprLeaderboard = await db.getMprLeaderboard()
-    res.json(mprLeaderboard)
-  } catch (error) {
-    console.error('Error getting MPR leaderboard:', error)
-    res.status(500).json({ error: 'Failed to fetch MPR leaderboard' })
-  }
-})

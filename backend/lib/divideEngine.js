@@ -129,7 +129,12 @@ export function areAllGamesComplete(matches, macroRound, gameNumber) {
 }
 
 export function isMacroRoundComplete(matches, macroRound) {
-  return areAllGamesComplete(matches, macroRound, 3)
+  for (let game = 1; game <= 3; game++) {
+    if (!areAllGamesComplete(matches, macroRound, game)) {
+      return false
+    }
+  }
+  return true
 }
 
 export function getExpectedCourts(playerCount) {

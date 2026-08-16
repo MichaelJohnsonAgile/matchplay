@@ -8,6 +8,7 @@ import {
   sortAthletesForSessionStandings,
   buildSwapUpdates,
   getDivideSessionState,
+  isMacroRoundComplete,
 } from './divideEngine.js'
 
 function athlete(id, rank, stats = {}) {
@@ -128,6 +129,30 @@ describe('divideEngine', () => {
       () => buildSwapUpdates(game1, 'a1', 'a2'),
       /different pairs/
     )
+  })
+
+  it('requires all three games before a macro round is complete', () => {
+    const baseMatch = (game, court, scored) => ({
+      round: 1,
+      group: game,
+      court,
+      winner: scored ? 'teamA' : null,
+      teamA: { players: [`g${game}a${court}`, `g${game}a${court}2`], score: scored ? 9 : null },
+      teamB: { players: [`g${game}b${court}`, `g${game}b${court}2`], score: scored ? 5 : null },
+    })
+
+    const onlyGame3 = [baseMatch(3, 1, true), baseMatch(3, 2, true)]
+    assert.equal(isMacroRoundComplete(onlyGame3, 1), false)
+
+    const allGames = [
+      baseMatch(1, 1, true),
+      baseMatch(1, 2, true),
+      baseMatch(2, 1, true),
+      baseMatch(2, 2, true),
+      baseMatch(3, 1, true),
+      baseMatch(3, 2, true),
+    ]
+    assert.equal(isMacroRoundComplete(allGames, 1), true)
   })
 
   it('tracks preview vs start for round 1', () => {

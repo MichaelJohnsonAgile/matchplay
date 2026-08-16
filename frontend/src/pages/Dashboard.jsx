@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Modal from '../components/Modal'
+import CreateAthleteForm from '../components/CreateAthleteForm'
 import { ConfirmModal, AlertModal } from '../components/Alert'
 import Skeleton from '../components/Skeleton'
-import { gameDayAPI, leaderboardAPI, athleteAPI, mprAPI } from '../services/api'
+import { gameDayAPI, leaderboardAPI, athleteAPI } from '../services/api'
 import { formatGameDayDate } from '../utils/dateFormat'
 import { useAdminMode, useNavigateWithAdmin } from '../hooks/useAdminMode'
-import { formatMpr, formatMprWithReliability } from '../lib/mpr'
 
 export default function Dashboard() {
   const navigate = useNavigateWithAdmin()
@@ -16,11 +16,7 @@ export default function Dashboard() {
   const [gameDays, setGameDays] = useState([])
   const [showAllGameDays, setShowAllGameDays] = useState(false)
   const [leaderboard, setLeaderboard] = useState([])
-  const [mprLeaderboard, setMprLeaderboard] = useState([])
-  const [leaderboardTab, setLeaderboardTab] = useState('season')
-  const [seasonSort, setSeasonSort] = useState('standing')
   const [isLoadingLeaderboard, setIsLoadingLeaderboard] = useState(true)
-  const [isBackfilling, setIsBackfilling] = useState(false)
   const [error, setError] = useState(null)
   
   // Check if admin mode is enabled via URL parameter
@@ -52,53 +48,13 @@ export default function Dashboard() {
   const loadLeaderboard = async () => {
     try {
       setIsLoadingLeaderboard(true)
-      const [seasonData, mprData] = await Promise.all([
-        leaderboardAPI.getOverall(),
-        leaderboardAPI.getMpr().catch(() => []),
-      ])
+      const seasonData = await leaderboardAPI.getOverall()
       setLeaderboard(seasonData)
-      setMprLeaderboard(mprData)
     } catch (err) {
       console.error('Failed to load leaderboard:', err)
     } finally {
       setIsLoadingLeaderboard(false)
     }
-  }
-
-  const handleRebackfillMpr = async () => {
-    setIsBackfilling(true)
-    try {
-      const summary = await mprAPI.rebackfill()
-      await loadLeaderboard()
-      setAlertModal({
-        isOpen: true,
-        title: 'MPR Recalculated',
-        message: `Processed ${summary.matchesProcessed} matches. ${summary.athletesRated} athletes rated. Average MPR: ${summary.avgRating ?? 'N/A'}`,
-        type: 'success',
-      })
-    } catch (err) {
-      console.error('MPR backfill failed:', err)
-      setAlertModal({
-        isOpen: true,
-        title: 'Error',
-        message: 'Failed to recalculate MPR ratings.',
-        type: 'error',
-      })
-    } finally {
-      setIsBackfilling(false)
-    }
-  }
-
-  const getSortedLeaderboard = () => {
-    if (seasonSort === 'mpr') {
-      return [...leaderboard].sort((a, b) => {
-        const aRating = a.doublesRating ?? 0
-        const bRating = b.doublesRating ?? 0
-        if (bRating !== aRating) return bRating - aRating
-        return (a.ratedMatchesCount ?? 0) - (b.ratedMatchesCount ?? 0)
-      })
-    }
-    return leaderboard
   }
 
   // Filter game days to show last 2 previous + upcoming
@@ -380,53 +336,16 @@ export default function Dashboard() {
         {/* Leaderboard */}
         <div className="mt-8">
           <div className="flex justify-between items-center mb-4 flex-wrap gap-2">
-            <div className="flex items-center gap-2">
-              <h2 className="text-lg font-semibold">Leaderboard</h2>
-              <div className="flex border border-gray-200 text-sm">
-                <button
-                  onClick={() => setLeaderboardTab('season')}
-                  className={`px-3 py-1 ${leaderboardTab === 'season' ? 'bg-[#377850] text-white' : 'hover:bg-gray-50'}`}
-                >
-                  Season
-                </button>
-                <button
-                  onClick={() => setLeaderboardTab('mpr')}
-                  className={`px-3 py-1 ${leaderboardTab === 'mpr' ? 'bg-[#377850] text-white' : 'hover:bg-gray-50'}`}
-                >
-                  MPR
-                </button>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              {leaderboardTab === 'season' && (
-                <select
-                  value={seasonSort}
-                  onChange={(e) => setSeasonSort(e.target.value)}
-                  className="border border-gray-200 text-sm px-2 py-1"
-                >
-                  <option value="standing">Sort by standing</option>
-                  <option value="mpr">Sort by MPR</option>
-                </select>
-              )}
-              {isAdminMode && (
-                <>
-                  <button
-                    onClick={handleRebackfillMpr}
-                    disabled={isBackfilling}
-                    className="border border-gray-200 px-3 py-1 text-sm hover:bg-gray-50 disabled:opacity-50"
-                  >
-                    {isBackfilling ? 'Recalculating…' : 'Recalculate MPR'}
-                  </button>
-                  <button
-                    onClick={() => setIsAthleteModalOpen(true)}
-                    className="bg-[#377850] text-white w-10 h-10 flex items-center justify-center text-2xl font-light hover:bg-[#2d5f40] transition-colors rounded leading-none"
-                    title="Add Athlete"
-                  >
-                    +
-                  </button>
-                </>
-              )}
-            </div>
+            <h2 className="text-lg font-semibold">Leaderboard</h2>
+            {isAdminMode && (
+              <button
+                onClick={() => setIsAthleteModalOpen(true)}
+                className="bg-[#377850] text-white w-10 h-10 flex items-center justify-center text-2xl font-light hover:bg-[#2d5f40] transition-colors rounded leading-none"
+                title="Add Athlete"
+              >
+                +
+              </button>
+            )}
           </div>
           
           {isLoadingLeaderboard ? (
@@ -437,46 +356,7 @@ export default function Dashboard() {
               <Skeleton className="h-12" />
               <Skeleton className="h-12" />
             </div>
-          ) : leaderboardTab === 'mpr' ? (
-            mprLeaderboard.length === 0 ? (
-              <div className="border border-gray-200 p-8 text-center">
-                <p className="text-gray-600">No MPR ratings yet. Complete at least 3 matches per athlete to qualify.</p>
-              </div>
-            ) : (
-              <div className="border border-gray-200 overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="border-b border-gray-200 bg-gray-50">
-                    <tr>
-                      <th className="text-left p-3 font-semibold">Rank</th>
-                      <th className="text-left p-3 font-semibold">Athlete</th>
-                      <th className="text-center p-3 font-semibold">MPR</th>
-                      <th className="text-center p-3 font-semibold">Reliability</th>
-                      <th className="text-center p-3 font-semibold">Matches</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {mprLeaderboard.map((athlete, index) => (
-                      <tr key={athlete.id} className="border-b border-gray-200 last:border-b-0 hover:bg-gray-50">
-                        <td className="p-3 font-medium">{index + 1}</td>
-                        <td className="p-3 font-medium">
-                          <button
-                            type="button"
-                            onClick={() => navigate(`/athlete/${athlete.id}`)}
-                            className="text-[#377850] hover:underline"
-                          >
-                            {athlete.name}
-                          </button>
-                        </td>
-                        <td className="p-3 text-center font-semibold text-[#377850]">{athlete.doublesRating.toFixed(3)}</td>
-                        <td className="p-3 text-center">{athlete.ratingReliability}%</td>
-                        <td className="p-3 text-center">{athlete.ratedMatchesCount}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )
-          ) : getSortedLeaderboard().length === 0 ? (
+          ) : leaderboard.length === 0 ? (
             <div className="border border-gray-200 p-8 text-center">
               <p className="text-gray-600">No leaderboard data yet. Complete some matches to see rankings!</p>
             </div>
@@ -487,7 +367,6 @@ export default function Dashboard() {
                   <tr>
                     <th className="text-left p-3 font-semibold">Rank</th>
                     <th className="text-left p-3 font-semibold">Athlete</th>
-                    <th className="text-center p-3 font-semibold">MPR</th>
                     <th className="text-center p-3 font-semibold">Games</th>
                     <th className="text-center p-3 font-semibold">W</th>
                     <th className="text-center p-3 font-semibold">L</th>
@@ -499,7 +378,7 @@ export default function Dashboard() {
                   </tr>
                 </thead>
                  <tbody>
-                   {getSortedLeaderboard().map((athlete, index) => {
+                   {leaderboard.map((athlete, index) => {
                      const stats = athlete.stats || {}
                      const matchesPlayed = stats.matchesPlayed || 0
                      const wins = stats.wins || 0
@@ -524,9 +403,6 @@ export default function Dashboard() {
                            >
                              {athlete.name}
                            </button>
-                         </td>
-                         <td className="p-3 text-center font-medium" title={isAdminMode ? formatMprWithReliability(athlete) : undefined}>
-                           {formatMpr(athlete)}
                          </td>
                          <td className="p-3 text-center">{matchesPlayed}</td>
                          <td className="p-3 text-center">{wins}</td>
@@ -945,117 +821,6 @@ function CreateGameDayForm({ onClose, onSuccess }) {
           className="flex-1 bg-[#377850] text-white px-4 py-2 text-sm font-medium disabled:bg-gray-400"
         >
           {isSubmitting ? 'Creating...' : 'Create Game Day'}
-        </button>
-      </div>
-    </form>
-  )
-}
-
-function CreateAthleteForm({ onClose, onSuccess }) {
-  const [formData, setFormData] = useState({
-    name: '',
-    email: ''
-  })
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [error, setError] = useState(null)
-
-  const handleChange = (e) => {
-    const { name, value } = e.target
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }))
-  }
-
-  const handleSubmit = async (e) => {
-    e.preventDefault()
-    
-    if (!formData.name.trim()) {
-      setError('Athlete name is required')
-      return
-    }
-
-    setIsSubmitting(true)
-    setError(null)
-    
-    try {
-      const newAthlete = await athleteAPI.create({
-        name: formData.name.trim(),
-        email: formData.email.trim()
-      })
-      
-      console.log('Created athlete:', newAthlete)
-      
-      // Notify parent to refresh list
-      if (onSuccess) {
-        await onSuccess()
-      }
-      
-      // Close modal
-      onClose()
-    } catch (err) {
-      console.error('Failed to create athlete:', err)
-      setError('Failed to create athlete. Please try again.')
-      setIsSubmitting(false)
-    }
-  }
-
-  return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      {error && (
-        <div className="border border-red-500 bg-red-50 p-3 text-sm text-red-800">
-          {error}
-        </div>
-      )}
-      
-      <div>
-        <label className="block text-sm font-medium mb-1">
-          Name <span className="text-red-500">*</span>
-        </label>
-        <input
-          type="text"
-          name="name"
-          value={formData.name}
-          onChange={handleChange}
-          required
-          placeholder="e.g., John Smith"
-          className="w-full border border-gray-200 px-3 py-2 text-sm"
-          autoFocus
-        />
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium mb-1">
-          Email <span className="text-gray-400 text-xs">(optional)</span>
-        </label>
-        <input
-          type="email"
-          name="email"
-          value={formData.email}
-          onChange={handleChange}
-          placeholder="e.g., john@example.com"
-          className="w-full border border-gray-200 px-3 py-2 text-sm"
-        />
-      </div>
-
-      <div className="border-t border-gray-200 pt-4 text-xs text-gray-600">
-        <p>The athlete will be automatically assigned the next available rank.</p>
-      </div>
-
-      <div className="flex gap-2 pt-2">
-        <button
-          type="button"
-          onClick={onClose}
-          className="flex-1 border border-gray-200 px-4 py-2 text-sm font-medium hover:bg-gray-50"
-        >
-          Cancel
-        </button>
-        <button
-          type="submit"
-          disabled={isSubmitting}
-          className="flex-1 bg-[#377850] text-white px-4 py-2 text-sm font-medium disabled:bg-gray-400 hover:bg-[#2d5f40]"
-        >
-          {isSubmitting ? 'Adding...' : 'Add Athlete'}
         </button>
       </div>
     </form>

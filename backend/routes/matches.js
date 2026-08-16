@@ -1,6 +1,5 @@
 import express from 'express'
 import * as db from '../database/queries.js'
-import * as ratingService from '../lib/ratingService.js'
 import { tryAdvanceDivideAfterScore } from '../lib/divideService.js'
 
 export const matchRoutes = express.Router()
@@ -92,15 +91,12 @@ matchRoutes.put('/:id/score', async (req, res) => {
       await db.updateGameDay(gameDayId, { status: 'completed' })
     }
     
-    let ratingUpdates = []
-    
-    // Auto-sync athlete ranks and MPR if a match was completed or score corrected
+    // Refresh season ranks when a match is completed or a score is corrected
     if (updateData.winner || (match.winner && (updateData.teamAScore !== undefined || updateData.teamBScore !== undefined))) {
       await db.syncAthleteRanks()
-      ratingUpdates = await ratingService.handleScoreUpdate(updatedMatch, match)
     }
     
-    res.json({ ...updatedMatch, ratingUpdates, divideAdvance })
+    res.json({ ...updatedMatch, divideAdvance })
   } catch (error) {
     console.error('Error updating match score:', error)
     res.status(500).json({ error: 'Failed to update match score' })

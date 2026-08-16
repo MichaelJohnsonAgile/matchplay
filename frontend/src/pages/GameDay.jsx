@@ -210,7 +210,14 @@ export default function GameDay() {
 
   tabs.push({
     label: 'Matches',
-    content: <MatchesTab gameDayId={id} gameDay={gameDay} isAdminMode={isAdminMode} />,
+    content: (
+      <MatchesTab
+        gameDayId={id}
+        gameDay={gameDay}
+        isAdminMode={isAdminMode}
+        onUpdate={loadGameDay}
+      />
+    ),
     disabled: !hasMatches || !divideRoundStarted
   })
 

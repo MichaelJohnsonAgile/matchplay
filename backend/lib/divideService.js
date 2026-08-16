@@ -67,6 +67,7 @@ async function buildRoundOnePairings(gameDayId) {
     }
   }
 
+  // Season rank (weighted win %, then +/-) — not skill rating
   await db.syncAthleteRanks()
   const sortedForPairing = [...athletes].sort((a, b) => a.rank - b.rank)
   const pairs = pairProAm(sortedForPairing)
