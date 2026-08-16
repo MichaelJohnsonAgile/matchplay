@@ -22,6 +22,7 @@ export default function GameDay() {
   const [isSaving, setIsSaving] = useState(false)
   const [showCompleteModal, setShowCompleteModal] = useState(false)
   const [isCompleting, setIsCompleting] = useState(false)
+  const [linkCopied, setLinkCopied] = useState(false)
   const [editFormData, setEditFormData] = useState({
     date: '',
     venue: '',
@@ -107,6 +108,20 @@ export default function GameDay() {
       ...prev,
       [name]: value
     }))
+  }
+
+  const getShareableLink = () => `${window.location.origin}/gameday/${id}`
+
+  const handleCopyShareLink = async () => {
+    const url = getShareableLink()
+    try {
+      await navigator.clipboard.writeText(url)
+      setLinkCopied(true)
+      setTimeout(() => setLinkCopied(false), 2000)
+    } catch (err) {
+      console.error('Failed to copy link:', err)
+      window.prompt('Copy this link:', url)
+    }
   }
 
   const handleCompleteGameDay = async () => {
@@ -199,26 +214,52 @@ export default function GameDay() {
   return (
     <div className="min-h-screen bg-white">
       <header className="border-b border-gray-200 p-4">
-        <img 
-          src="/logo.svg" 
-          alt="MatchPlay" 
-          className="h-12 w-auto"
-        />
-        <div className="flex items-center gap-2 mt-2">
-          <div className="text-sm text-gray-600">
-            {formatGameDayDate(gameDay.date)} • {gameDay.venue}
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <img 
+              src="/logo.svg" 
+              alt="MatchPlay" 
+              className="h-12 w-auto"
+            />
+            <div className="flex items-center gap-2 mt-2 flex-wrap">
+              <div className="text-sm text-gray-600">
+                {formatGameDayDate(gameDay.date)} • {gameDay.venue}
+              </div>
+              <span className={`px-2 py-0.5 text-xs font-medium rounded ${
+                isTeamsMode 
+                  ? 'bg-blue-100 text-blue-800' 
+                  : isPairsMode
+                  ? 'bg-purple-100 text-purple-800'
+                  : isDivideMode
+                  ? 'bg-orange-100 text-orange-800'
+                  : 'bg-gray-100 text-gray-700'
+              }`}>
+                {isTeamsMode ? 'Teams' : isPairsMode ? 'Pairs' : isDivideMode ? 'Divide & Conquer' : 'Groups'}
+              </span>
+            </div>
           </div>
-          <span className={`px-2 py-0.5 text-xs font-medium rounded ${
-            isTeamsMode 
-              ? 'bg-blue-100 text-blue-800' 
-              : isPairsMode
-              ? 'bg-purple-100 text-purple-800'
-              : isDivideMode
-              ? 'bg-orange-100 text-orange-800'
-              : 'bg-gray-100 text-gray-700'
-          }`}>
-            {isTeamsMode ? 'Teams' : isPairsMode ? 'Pairs' : isDivideMode ? 'Divide & Conquer' : 'Groups'}
-          </span>
+
+          <button
+            type="button"
+            onClick={handleCopyShareLink}
+            className={`flex-shrink-0 inline-flex items-center justify-center w-10 h-10 border rounded transition-colors ${
+              linkCopied
+                ? 'border-green-500 bg-green-50 text-green-700'
+                : 'border-gray-200 text-gray-700 hover:bg-gray-50 hover:border-gray-300'
+            }`}
+            title={linkCopied ? 'Link copied' : 'Copy shareable link (no admin access)'}
+            aria-label={linkCopied ? 'Link copied to clipboard' : 'Copy shareable link'}
+          >
+            {linkCopied ? (
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            ) : (
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+              </svg>
+            )}
+          </button>
         </div>
         <div className="flex gap-2 mt-3">
           <button
