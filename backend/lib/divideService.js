@@ -299,4 +299,4 @@ export async function swapRound1Partners(gameDayId, player1Id, player2Id) {
   }
 }
 
-export { getDivideSessionState, MACRO_ROUNDS, GAMES_PER_ROUND, canSwapRound1Partners, previewDivideRound1 }
+export { getDivideSessionState, MACRO_ROUNDS, GAMES_PER_ROUND, canSwapRound1Partners }
