@@ -4,6 +4,7 @@ import Tabs from '../components/Tabs'
 import Modal from '../components/Modal'
 import AthletesTab from '../components/gameday/AthletesTab'
 import MatchesTab from '../components/gameday/MatchesTab'
+import MyMatchesTab from '../components/gameday/MyMatchesTab'
 import { TeamsTab } from '../components/gameday/TeamsTab'
 import { GroupsTab } from '../components/gameday/GroupsTab'
 import { gameDayAPI } from '../services/api'
@@ -177,6 +178,11 @@ export default function GameDay() {
       label: `Athletes (${gameDay.athleteCount || 0})`,
       content: <AthletesTab gameDayId={id} gameDay={gameDay} onUpdate={loadGameDay} isAdminMode={isAdminMode} />,
       disabled: false
+    },
+    {
+      label: 'My Matches',
+      content: <MyMatchesTab gameDayId={id} gameDay={gameDay} />,
+      disabled: (gameDay.athleteCount || 0) === 0
     }
   ]
   
