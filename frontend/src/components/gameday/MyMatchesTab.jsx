@@ -230,11 +230,56 @@ function getRankLabelForGroup(group, allMatches, isDivideMode) {
   return `Rank entering Round ${group.round}`
 }
 
-function BlankMatchSlot({ round, game }) {
+function getIncompleteCourtsForGame(allMatches, round, gameNumber) {
+  return allMatches
+    .filter((m) => m.round === round && m.group === gameNumber && m.court && !m.winner)
+    .map((m) => m.court)
+    .sort((a, b) => a - b)
+}
+
+function getBlankSlotWaitingCourts(allMatches, group, round, game) {
+  if (game <= 1) return null
+
+  const previousGameComplete = group.items.some(
+    (item) =>
+      item.type === 'match' &&
+      item.match.round === round &&
+      item.match.group === game - 1 &&
+      item.match.winner
+  )
+  if (!previousGameComplete) return null
+
+  const incompleteCourts = getIncompleteCourtsForGame(allMatches, round, game - 1)
+  return incompleteCourts.length > 0 ? incompleteCourts : null
+}
+
+function formatWaitingOnCourts(courts) {
+  return `Waiting on Courts ${courts.join(', ')}`
+}
+
+function getGroupWaitingCourts(allMatches, group, isDivideMode) {
+  if (!isDivideMode || !group.round) return null
+
+  for (const item of group.items) {
+    if (item.type !== 'blank') continue
+    const courts = getBlankSlotWaitingCourts(allMatches, group, item.round, item.game)
+    if (courts) {
+      return { round: item.round, game: item.game, previousGame: item.game - 1, courts }
+    }
+  }
+  return null
+}
+
+function BlankMatchSlot({ round, game, waitingCourts }) {
   return (
     <div className="border border-dashed border-gray-200 rounded p-3 bg-gray-50/40">
-      <div className="text-xs text-gray-500 mb-3">
+      <div className="text-xs text-gray-500 mb-3 flex justify-between items-start gap-2 flex-wrap">
         <span className="font-medium text-gray-600">{getDivideSlotLabel(round, game)}</span>
+        {waitingCourts && (
+          <span className="px-2 py-0.5 rounded text-xs font-semibold bg-amber-100 text-amber-800">
+            {formatWaitingOnCourts(waitingCourts)}
+          </span>
+        )}
       </div>
 
       <div className="space-y-2 text-sm">
@@ -378,11 +423,13 @@ function PartnerGroup({
   athletes,
   gameDay,
   onScoreClick,
+  allMatches,
 }) {
   const { stats } = group
   const played = stats.wins + stats.losses
   const diff = stats.pointsFor - stats.pointsAgainst
   const winPct = played > 0 ? Math.round((stats.wins / played) * 100) : null
+  const groupWaiting = getGroupWaitingCourts(allMatches, group, isDivideMode)
 
   const title = partnerName ? (
     <>
@@ -428,8 +475,14 @@ function PartnerGroup({
                 {winPct !== null && <> · {winPct}% win</>}
               </>
             )}
-            {stats.upcoming > 0 && (
+            {stats.upcoming > 0 && !groupWaiting && (
               <span className="text-amber-700"> · {stats.upcoming} upcoming</span>
+            )}
+            {groupWaiting && (
+              <span className="text-amber-700">
+                {' · '}
+                {formatWaitingOnCourts(groupWaiting.courts)}
+              </span>
             )}
           </p>
         </div>
@@ -446,6 +499,14 @@ function PartnerGroup({
 
       {expanded && (
         <div className="p-3 space-y-3 border-t border-gray-200 bg-white">
+          {groupWaiting && (
+            <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+              <p className="font-medium">{formatWaitingOnCourts(groupWaiting.courts)}</p>
+              <p className="text-xs text-amber-800 mt-0.5">
+                Game {groupWaiting.game} will be drawn once every court finishes Game {groupWaiting.previousGame}.
+              </p>
+            </div>
+          )}
           {group.items.map((item) =>
             item.type === 'match' ? (
               <MatchCard
@@ -459,7 +520,12 @@ function PartnerGroup({
                 partnerRank={partnerRank}
               />
             ) : (
-              <BlankMatchSlot key={`blank-${item.round}-${item.game}`} round={item.round} game={item.game} />
+              <BlankMatchSlot
+                key={`blank-${item.round}-${item.game}`}
+                round={item.round}
+                game={item.game}
+                waitingCourts={getBlankSlotWaitingCourts(allMatches, group, item.round, item.game)}
+              />
             )
           )}
         </div>
@@ -700,6 +766,7 @@ export default function MyMatchesTab({ gameDayId, gameDay, onUpdate }) {
                 athletes={athletes}
                 gameDay={gameDay}
                 onScoreClick={openScoreModal}
+                allMatches={matches}
               />
             )
           })}

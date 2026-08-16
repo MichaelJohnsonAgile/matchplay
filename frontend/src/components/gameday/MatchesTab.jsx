@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { SkeletonText } from '../Skeleton'
 import Modal from '../Modal'
 import { AlertModal } from '../Alert'
 import { matchAPI, athleteAPI, gameDayAPI, teamsAPI } from '../../services/api'
+import { getCurrentMatchView } from '../../utils/matchViewNavigation'
 
 // Team colour definitions for visual indicators
 const TEAM_COLOR_CLASSES = {
@@ -30,7 +31,12 @@ export default function MatchesTab({ gameDayId, gameDay, isAdminMode = false, on
   
   // Check if draw has been generated
   const hasMatches = gameDay?.matchCount > 0
-  
+  const viewInitializedRef = useRef(false)
+
+  useEffect(() => {
+    viewInitializedRef.current = false
+  }, [gameDayId])
+
   useEffect(() => {
     console.log('MatchesTab useEffect - hasMatches:', hasMatches, 'gameDayId:', gameDayId)
     if (hasMatches) {
@@ -67,6 +73,14 @@ export default function MatchesTab({ gameDayId, gameDay, isAdminMode = false, on
       if (isTeams) console.log('Loaded teams:', teamsData)
       
       setMatches(matchesData)
+
+      if (!viewInitializedRef.current && matchesData.length > 0) {
+        const view = getCurrentMatchView(matchesData, gameDay)
+        setSelectedRound(view.round)
+        if (view.game) setSelectedGame(view.game)
+        if (view.group) setSelectedGroup(view.group)
+        viewInitializedRef.current = true
+      }
       
       if (gameDay?.settings?.format === 'divide') {
         try {
