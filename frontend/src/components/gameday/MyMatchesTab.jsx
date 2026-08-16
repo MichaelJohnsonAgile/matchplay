@@ -137,6 +137,99 @@ function pickDefaultExpandedGroupKey(groups) {
   return groups[groups.length - 1]?.groupKey ?? null
 }
 
+function isDivideRoundComplete(allMatches, macroRound) {
+  const roundMatches = allMatches.filter((m) => m.round === macroRound)
+  if (roundMatches.length === 0) return false
+  return roundMatches.every((m) => m.winner)
+}
+
+function getRankThroughRoundForDivideGroup(round, allMatches) {
+  if (isDivideRoundComplete(allMatches, round)) return round
+  if (round > 1 && isDivideRoundComplete(allMatches, round - 1)) return round - 1
+  return 0
+}
+
+function computeSessionRanks(roster, allMatches, throughRound) {
+  const athleteStats = new Map()
+  for (const athlete of roster) {
+    athleteStats.set(athlete.id, {
+      id: athlete.id,
+      wins: 0,
+      pointsDiff: 0,
+      seasonRank: athlete.rank ?? 9999,
+    })
+  }
+
+  const relevant = allMatches.filter(
+    (m) => m.winner && m.round > 0 && m.round <= throughRound
+  )
+
+  for (const match of relevant) {
+    const scoreA = match.teamA.score ?? 0
+    const scoreB = match.teamB.score ?? 0
+    for (const playerId of match.teamA.players) {
+      if (!athleteStats.has(playerId)) continue
+      const entry = athleteStats.get(playerId)
+      entry.pointsDiff += scoreA - scoreB
+      if (match.winner === 'teamA') entry.wins += 1
+    }
+    for (const playerId of match.teamB.players) {
+      if (!athleteStats.has(playerId)) continue
+      const entry = athleteStats.get(playerId)
+      entry.pointsDiff += scoreB - scoreA
+      if (match.winner === 'teamB') entry.wins += 1
+    }
+  }
+
+  const sorted = [...athleteStats.values()].sort((a, b) => {
+    if (b.wins !== a.wins) return b.wins - a.wins
+    if (b.pointsDiff !== a.pointsDiff) return b.pointsDiff - a.pointsDiff
+    return a.seasonRank - b.seasonRank
+  })
+
+  const rankMap = new Map()
+  sorted.forEach((entry, index) => {
+    rankMap.set(entry.id, index + 1)
+  })
+  return rankMap
+}
+
+function buildRankMapForGroup(group, roster, allMatches, isDivideMode) {
+  if (isDivideMode && group.round) {
+    const throughRound = getRankThroughRoundForDivideGroup(group.round, allMatches)
+    if (throughRound === 0) {
+      return new Map(roster.map((a) => [a.id, a.rank]))
+    }
+    return computeSessionRanks(roster, allMatches, throughRound)
+  }
+
+  const maxRound = allMatches.reduce((max, m) => (m.round > max ? m.round : max), 0)
+  if (maxRound <= 0) {
+    return new Map(roster.map((a) => [a.id, a.rank]))
+  }
+  return computeSessionRanks(roster, allMatches, maxRound)
+}
+
+function formatNameWithRank(name, rank) {
+  if (rank == null || rank === '') return name
+  return (
+    <>
+      {name}
+      <span className="text-gray-500 font-normal"> #{rank}</span>
+    </>
+  )
+}
+
+function getRankLabelForGroup(group, allMatches, isDivideMode) {
+  if (!isDivideMode || !group.round) return null
+  const throughRound = getRankThroughRoundForDivideGroup(group.round, allMatches)
+  if (throughRound === 0) return 'Season rank'
+  if (isDivideRoundComplete(allMatches, group.round)) {
+    return `Rank after Round ${group.round}`
+  }
+  return `Rank entering Round ${group.round}`
+}
+
 function BlankMatchSlot({ round, game }) {
   return (
     <div className="border border-dashed border-gray-200 rounded p-3 bg-gray-50/40">
@@ -171,7 +264,7 @@ function BlankMatchSlot({ round, game }) {
   )
 }
 
-function MatchCard({ match, athleteId, athletes, gameDay, onScoreClick }) {
+function MatchCard({ match, athleteId, athletes, gameDay, onScoreClick, myRank, partnerRank }) {
   const onTeamA = match.teamA.players.includes(athleteId)
   const myTeam = onTeamA ? match.teamA : match.teamB
   const oppTeam = onTeamA ? match.teamB : match.teamA
@@ -223,9 +316,9 @@ function MatchCard({ match, athleteId, athletes, gameDay, onScoreClick }) {
           <div>
             <p className="text-xs text-gray-500 mb-0.5">Your team</p>
             <p className="font-medium">
-              <span className="text-[#377850]">{myName}</span>
+              <span className="text-[#377850]">{formatNameWithRank(myName, myRank)}</span>
               {' & '}
-              {partnerName}
+              {formatNameWithRank(partnerName, partnerRank)}
             </p>
           </div>
           <div className="h-8 w-14 rounded border border-gray-200 bg-white flex items-center justify-center font-semibold flex-shrink-0">
@@ -274,6 +367,10 @@ function MatchCard({ match, athleteId, athletes, gameDay, onScoreClick }) {
 function PartnerGroup({
   group,
   partnerName,
+  myName,
+  myRank,
+  partnerRank,
+  rankLabel,
   isDivideMode,
   expanded,
   onToggle,
@@ -287,11 +384,20 @@ function PartnerGroup({
   const diff = stats.pointsFor - stats.pointsAgainst
   const winPct = played > 0 ? Math.round((stats.wins / played) * 100) : null
 
-  const title = partnerName
-    ? partnerName
-    : isDivideMode && group.round
-      ? `Round ${group.round}`
-      : 'Partner'
+  const title = partnerName ? (
+    <>
+      {formatNameWithRank(myName, myRank)}
+      {' & '}
+      {formatNameWithRank(partnerName, partnerRank)}
+    </>
+  ) : isDivideMode && group.round ? (
+    <>
+      {formatNameWithRank(myName, myRank)}
+      <span className="text-gray-500 font-normal"> · Round {group.round}</span>
+    </>
+  ) : (
+    formatNameWithRank(partnerName || 'Partner', partnerRank)
+  )
 
   return (
     <div className="border border-gray-200 rounded overflow-hidden">
@@ -302,8 +408,14 @@ function PartnerGroup({
         aria-expanded={expanded}
       >
         <div className="min-w-0">
-          <p className="font-semibold text-gray-900 truncate">{title}</p>
+          <p className="font-semibold text-gray-900">{title}</p>
           <p className="text-xs text-gray-600 mt-0.5">
+            {rankLabel && (
+              <>
+                <span className="text-gray-500">{rankLabel}</span>
+                {' · '}
+              </>
+            )}
             <span className="text-green-700 font-medium">{stats.wins}W</span>
             {' · '}
             <span className="text-red-700 font-medium">{stats.losses}L</span>
@@ -343,6 +455,8 @@ function PartnerGroup({
                 athletes={athletes}
                 gameDay={gameDay}
                 onScoreClick={onScoreClick}
+                myRank={myRank}
+                partnerRank={partnerRank}
               />
             ) : (
               <BlankMatchSlot key={`blank-${item.round}-${item.game}`} round={item.round} game={item.game} />
@@ -565,20 +679,30 @@ export default function MyMatchesTab({ gameDayId, gameDay, onUpdate }) {
 
       {selectedAthleteId && (hasAnyScheduledMatches || isDivideMode) && (
         <div className="space-y-3">
-          {partnerGroups.map((group) => (
-            <PartnerGroup
-              key={group.groupKey}
-              group={group}
-              partnerName={group.partnerId ? getAthleteName(group.partnerId) : null}
-              isDivideMode={isDivideMode}
-              expanded={expandedGroups.has(group.groupKey)}
-              onToggle={() => toggleGroup(group.groupKey)}
-              athleteId={selectedAthleteId}
-              athletes={athletes}
-              gameDay={gameDay}
-              onScoreClick={openScoreModal}
-            />
-          ))}
+          {partnerGroups.map((group) => {
+            const rankMap = buildRankMapForGroup(group, roster, matches, isDivideMode)
+            const myRank = rankMap.get(selectedAthleteId)
+            const partnerRank = group.partnerId ? rankMap.get(group.partnerId) : null
+
+            return (
+              <PartnerGroup
+                key={group.groupKey}
+                group={group}
+                partnerName={group.partnerId ? getAthleteName(group.partnerId) : null}
+                myName={getAthleteName(selectedAthleteId)}
+                myRank={myRank}
+                partnerRank={partnerRank}
+                rankLabel={getRankLabelForGroup(group, matches, isDivideMode)}
+                isDivideMode={isDivideMode}
+                expanded={expandedGroups.has(group.groupKey)}
+                onToggle={() => toggleGroup(group.groupKey)}
+                athleteId={selectedAthleteId}
+                athletes={athletes}
+                gameDay={gameDay}
+                onScoreClick={openScoreModal}
+              />
+            )
+          })}
         </div>
       )}
 
