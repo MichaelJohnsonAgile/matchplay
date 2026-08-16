@@ -257,19 +257,6 @@ function formatWaitingOnCourts(courts) {
   return `Waiting on Courts ${courts.join(', ')}`
 }
 
-function getGroupWaitingCourts(allMatches, group, isDivideMode) {
-  if (!isDivideMode || !group.round) return null
-
-  for (const item of group.items) {
-    if (item.type !== 'blank') continue
-    const courts = getBlankSlotWaitingCourts(allMatches, group, item.round, item.game)
-    if (courts) {
-      return { round: item.round, game: item.game, previousGame: item.game - 1, courts }
-    }
-  }
-  return null
-}
-
 function BlankMatchSlot({ round, game, waitingCourts }) {
   return (
     <div className="border border-dashed border-gray-200 rounded p-3 bg-gray-50/40">
@@ -429,7 +416,6 @@ function PartnerGroup({
   const played = stats.wins + stats.losses
   const diff = stats.pointsFor - stats.pointsAgainst
   const winPct = played > 0 ? Math.round((stats.wins / played) * 100) : null
-  const groupWaiting = getGroupWaitingCourts(allMatches, group, isDivideMode)
 
   const title = partnerName ? (
     <>
@@ -475,14 +461,8 @@ function PartnerGroup({
                 {winPct !== null && <> · {winPct}% win</>}
               </>
             )}
-            {stats.upcoming > 0 && !groupWaiting && (
+            {stats.upcoming > 0 && (
               <span className="text-amber-700"> · {stats.upcoming} upcoming</span>
-            )}
-            {groupWaiting && (
-              <span className="text-amber-700">
-                {' · '}
-                {formatWaitingOnCourts(groupWaiting.courts)}
-              </span>
             )}
           </p>
         </div>
@@ -499,14 +479,6 @@ function PartnerGroup({
 
       {expanded && (
         <div className="p-3 space-y-3 border-t border-gray-200 bg-white">
-          {groupWaiting && (
-            <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-              <p className="font-medium">{formatWaitingOnCourts(groupWaiting.courts)}</p>
-              <p className="text-xs text-amber-800 mt-0.5">
-                Game {groupWaiting.game} will be drawn once every court finishes Game {groupWaiting.previousGame}.
-              </p>
-            </div>
-          )}
           {group.items.map((item) =>
             item.type === 'match' ? (
               <MatchCard
