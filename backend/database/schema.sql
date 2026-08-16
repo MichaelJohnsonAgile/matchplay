@@ -2,6 +2,7 @@
 -- PostgreSQL Database for Pickleball League Management
 
 -- Drop existing tables if they exist (for clean re-initialization)
+DROP TABLE IF EXISTS rating_history CASCADE;
 DROP TABLE IF EXISTS matches CASCADE;
 DROP TABLE IF EXISTS gameday_athletes CASCADE;
 DROP TABLE IF EXISTS gamedays CASCADE;
@@ -14,6 +15,10 @@ CREATE TABLE athletes (
     email VARCHAR(255),
     status VARCHAR(20) DEFAULT 'active' CHECK (status IN ('active', 'inactive')),
     rank INTEGER NOT NULL,
+    doubles_rating DECIMAL(5,3),
+    rating_reliability SMALLINT DEFAULT 0,
+    rated_matches_count INTEGER DEFAULT 0,
+    rating_updated_at TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -62,8 +67,23 @@ CREATE TABLE matches (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Rating history (MPR audit trail)
+CREATE TABLE rating_history (
+    id SERIAL PRIMARY KEY,
+    athlete_id VARCHAR(50) REFERENCES athletes(id) ON DELETE CASCADE,
+    match_id VARCHAR(50) REFERENCES matches(id) ON DELETE CASCADE,
+    rating_before DECIMAL(5,3),
+    rating_after DECIMAL(5,3),
+    delta DECIMAL(5,3),
+    created_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE (athlete_id, match_id)
+);
+
 -- Indexes for performance
 CREATE INDEX idx_athletes_rank ON athletes(rank);
+CREATE INDEX idx_athletes_doubles_rating ON athletes(doubles_rating DESC NULLS LAST);
+CREATE INDEX idx_rating_history_athlete ON rating_history(athlete_id, created_at DESC);
+CREATE INDEX idx_rating_history_match ON rating_history(match_id);
 CREATE INDEX idx_athletes_status ON athletes(status);
 CREATE INDEX idx_gamedays_date ON gamedays(date);
 CREATE INDEX idx_gamedays_status ON gamedays(status);

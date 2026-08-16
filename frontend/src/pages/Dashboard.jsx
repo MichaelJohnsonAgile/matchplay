@@ -3,9 +3,10 @@ import { useNavigate } from 'react-router-dom'
 import Modal from '../components/Modal'
 import { ConfirmModal, AlertModal } from '../components/Alert'
 import Skeleton from '../components/Skeleton'
-import { gameDayAPI, leaderboardAPI, athleteAPI } from '../services/api'
+import { gameDayAPI, leaderboardAPI, athleteAPI, mprAPI } from '../services/api'
 import { formatGameDayDate } from '../utils/dateFormat'
 import { useAdminMode, useNavigateWithAdmin } from '../hooks/useAdminMode'
+import { formatMpr, formatMprWithReliability } from '../lib/mpr'
 
 export default function Dashboard() {
   const navigate = useNavigateWithAdmin()
@@ -15,7 +16,11 @@ export default function Dashboard() {
   const [gameDays, setGameDays] = useState([])
   const [showAllGameDays, setShowAllGameDays] = useState(false)
   const [leaderboard, setLeaderboard] = useState([])
+  const [mprLeaderboard, setMprLeaderboard] = useState([])
+  const [leaderboardTab, setLeaderboardTab] = useState('season')
+  const [seasonSort, setSeasonSort] = useState('standing')
   const [isLoadingLeaderboard, setIsLoadingLeaderboard] = useState(true)
+  const [isBackfilling, setIsBackfilling] = useState(false)
   const [error, setError] = useState(null)
   
   // Check if admin mode is enabled via URL parameter
@@ -47,13 +52,53 @@ export default function Dashboard() {
   const loadLeaderboard = async () => {
     try {
       setIsLoadingLeaderboard(true)
-      const data = await leaderboardAPI.getOverall()
-      setLeaderboard(data)
+      const [seasonData, mprData] = await Promise.all([
+        leaderboardAPI.getOverall(),
+        leaderboardAPI.getMpr().catch(() => []),
+      ])
+      setLeaderboard(seasonData)
+      setMprLeaderboard(mprData)
     } catch (err) {
       console.error('Failed to load leaderboard:', err)
     } finally {
       setIsLoadingLeaderboard(false)
     }
+  }
+
+  const handleRebackfillMpr = async () => {
+    setIsBackfilling(true)
+    try {
+      const summary = await mprAPI.rebackfill()
+      await loadLeaderboard()
+      setAlertModal({
+        isOpen: true,
+        title: 'MPR Recalculated',
+        message: `Processed ${summary.matchesProcessed} matches. ${summary.athletesRated} athletes rated. Average MPR: ${summary.avgRating ?? 'N/A'}`,
+        type: 'success',
+      })
+    } catch (err) {
+      console.error('MPR backfill failed:', err)
+      setAlertModal({
+        isOpen: true,
+        title: 'Error',
+        message: 'Failed to recalculate MPR ratings.',
+        type: 'error',
+      })
+    } finally {
+      setIsBackfilling(false)
+    }
+  }
+
+  const getSortedLeaderboard = () => {
+    if (seasonSort === 'mpr') {
+      return [...leaderboard].sort((a, b) => {
+        const aRating = a.doublesRating ?? 0
+        const bRating = b.doublesRating ?? 0
+        if (bRating !== aRating) return bRating - aRating
+        return (a.ratedMatchesCount ?? 0) - (b.ratedMatchesCount ?? 0)
+      })
+    }
+    return leaderboard
   }
 
   // Filter game days to show last 2 previous + upcoming
@@ -334,17 +379,54 @@ export default function Dashboard() {
 
         {/* Leaderboard */}
         <div className="mt-8">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-lg font-semibold">Leaderboard</h2>
-            {isAdminMode && (
-              <button
-                onClick={() => setIsAthleteModalOpen(true)}
-                className="bg-[#377850] text-white w-10 h-10 flex items-center justify-center text-2xl font-light hover:bg-[#2d5f40] transition-colors rounded leading-none"
-                title="Add Athlete"
-              >
-                +
-              </button>
-            )}
+          <div className="flex justify-between items-center mb-4 flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <h2 className="text-lg font-semibold">Leaderboard</h2>
+              <div className="flex border border-gray-200 text-sm">
+                <button
+                  onClick={() => setLeaderboardTab('season')}
+                  className={`px-3 py-1 ${leaderboardTab === 'season' ? 'bg-[#377850] text-white' : 'hover:bg-gray-50'}`}
+                >
+                  Season
+                </button>
+                <button
+                  onClick={() => setLeaderboardTab('mpr')}
+                  className={`px-3 py-1 ${leaderboardTab === 'mpr' ? 'bg-[#377850] text-white' : 'hover:bg-gray-50'}`}
+                >
+                  MPR
+                </button>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              {leaderboardTab === 'season' && (
+                <select
+                  value={seasonSort}
+                  onChange={(e) => setSeasonSort(e.target.value)}
+                  className="border border-gray-200 text-sm px-2 py-1"
+                >
+                  <option value="standing">Sort by standing</option>
+                  <option value="mpr">Sort by MPR</option>
+                </select>
+              )}
+              {isAdminMode && (
+                <>
+                  <button
+                    onClick={handleRebackfillMpr}
+                    disabled={isBackfilling}
+                    className="border border-gray-200 px-3 py-1 text-sm hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    {isBackfilling ? 'Recalculating…' : 'Recalculate MPR'}
+                  </button>
+                  <button
+                    onClick={() => setIsAthleteModalOpen(true)}
+                    className="bg-[#377850] text-white w-10 h-10 flex items-center justify-center text-2xl font-light hover:bg-[#2d5f40] transition-colors rounded leading-none"
+                    title="Add Athlete"
+                  >
+                    +
+                  </button>
+                </>
+              )}
+            </div>
           </div>
           
           {isLoadingLeaderboard ? (
@@ -355,7 +437,46 @@ export default function Dashboard() {
               <Skeleton className="h-12" />
               <Skeleton className="h-12" />
             </div>
-          ) : leaderboard.length === 0 ? (
+          ) : leaderboardTab === 'mpr' ? (
+            mprLeaderboard.length === 0 ? (
+              <div className="border border-gray-200 p-8 text-center">
+                <p className="text-gray-600">No MPR ratings yet. Complete at least 3 matches per athlete to qualify.</p>
+              </div>
+            ) : (
+              <div className="border border-gray-200 overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="border-b border-gray-200 bg-gray-50">
+                    <tr>
+                      <th className="text-left p-3 font-semibold">Rank</th>
+                      <th className="text-left p-3 font-semibold">Athlete</th>
+                      <th className="text-center p-3 font-semibold">MPR</th>
+                      <th className="text-center p-3 font-semibold">Reliability</th>
+                      <th className="text-center p-3 font-semibold">Matches</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {mprLeaderboard.map((athlete, index) => (
+                      <tr key={athlete.id} className="border-b border-gray-200 last:border-b-0 hover:bg-gray-50">
+                        <td className="p-3 font-medium">{index + 1}</td>
+                        <td className="p-3 font-medium">
+                          <button
+                            type="button"
+                            onClick={() => navigate(`/athlete/${athlete.id}`)}
+                            className="text-[#377850] hover:underline"
+                          >
+                            {athlete.name}
+                          </button>
+                        </td>
+                        <td className="p-3 text-center font-semibold text-[#377850]">{athlete.doublesRating.toFixed(3)}</td>
+                        <td className="p-3 text-center">{athlete.ratingReliability}%</td>
+                        <td className="p-3 text-center">{athlete.ratedMatchesCount}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )
+          ) : getSortedLeaderboard().length === 0 ? (
             <div className="border border-gray-200 p-8 text-center">
               <p className="text-gray-600">No leaderboard data yet. Complete some matches to see rankings!</p>
             </div>
@@ -366,6 +487,7 @@ export default function Dashboard() {
                   <tr>
                     <th className="text-left p-3 font-semibold">Rank</th>
                     <th className="text-left p-3 font-semibold">Athlete</th>
+                    <th className="text-center p-3 font-semibold">MPR</th>
                     <th className="text-center p-3 font-semibold">Games</th>
                     <th className="text-center p-3 font-semibold">W</th>
                     <th className="text-center p-3 font-semibold">L</th>
@@ -377,7 +499,7 @@ export default function Dashboard() {
                   </tr>
                 </thead>
                  <tbody>
-                   {leaderboard.map((athlete, index) => {
+                   {getSortedLeaderboard().map((athlete, index) => {
                      const stats = athlete.stats || {}
                      const matchesPlayed = stats.matchesPlayed || 0
                      const wins = stats.wins || 0
@@ -394,7 +516,18 @@ export default function Dashboard() {
                          className="border-b border-gray-200 last:border-b-0 hover:bg-gray-50"
                        >
                          <td className="p-3 font-medium">{index + 1}</td>
-                         <td className="p-3 font-medium">{athlete.name}</td>
+                         <td className="p-3 font-medium">
+                           <button
+                             type="button"
+                             onClick={() => navigate(`/athlete/${athlete.id}`)}
+                             className="text-[#377850] hover:underline"
+                           >
+                             {athlete.name}
+                           </button>
+                         </td>
+                         <td className="p-3 text-center font-medium" title={isAdminMode ? formatMprWithReliability(athlete) : undefined}>
+                           {formatMpr(athlete)}
+                         </td>
                          <td className="p-3 text-center">{matchesPlayed}</td>
                          <td className="p-3 text-center">{wins}</td>
                          <td className="p-3 text-center">{losses}</td>
@@ -493,8 +626,9 @@ function CreateGameDayForm({ onClose, onSuccess }) {
     setFormData(prev => ({
       ...prev,
       format,
-      // Set appropriate defaults based on format
-      pointsToWin: format === 'teams' ? 7 : 11
+      pointsToWin: format === 'teams' ? 7 : format === 'divide' ? 9 : 11,
+      winByMargin: format === 'divide' ? 1 : 2,
+      rounds: format === 'divide' ? 3 : prev.rounds,
     }))
     setStep(2)
   }
@@ -593,6 +727,25 @@ function CreateGameDayForm({ onClose, onSuccess }) {
               </svg>
             </div>
           </button>
+
+          {/* Divide & Conquer Format Card */}
+          <button
+            type="button"
+            onClick={() => handleFormatSelect('divide')}
+            className="border-2 border-gray-200 hover:border-orange-500 p-4 text-left transition-all rounded-lg group"
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="font-semibold text-lg mb-1">Divide & Conquer</h4>
+                <p className="text-sm text-gray-600">
+                  3 rounds × 3 games — pro-am start, court ladder, re-pair from standings
+                </p>
+              </div>
+              <svg className="w-5 h-5 text-gray-400 group-hover:text-orange-500 flex-shrink-0 ml-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </div>
+          </button>
         </div>
 
         <div className="flex gap-2 pt-4">
@@ -624,9 +777,13 @@ function CreateGameDayForm({ onClose, onSuccess }) {
           <span className={`text-sm font-semibold ${
             formData.format === 'teams' ? 'text-blue-600' : 
             formData.format === 'pairs' ? 'text-purple-600' : 
+            formData.format === 'divide' ? 'text-orange-600' :
             'text-[#377850]'
           }`}>
-            {formData.format === 'teams' ? 'Teams' : formData.format === 'pairs' ? 'Pairs' : 'Groups'}
+            {formData.format === 'teams' ? 'Teams' : 
+             formData.format === 'pairs' ? 'Pairs' : 
+             formData.format === 'divide' ? 'Divide & Conquer' :
+             'Groups'}
           </span>
         </div>
         <button
@@ -725,6 +882,18 @@ function CreateGameDayForm({ onClose, onSuccess }) {
           </div>
         </div>
       </div>
+
+      {formData.format === 'divide' && (
+        <div className="bg-orange-50 border border-orange-200 rounded p-3 text-sm text-orange-900">
+          <p className="font-medium mb-1">Divide & Conquer session</p>
+          <ul className="list-disc list-inside space-y-1 text-orange-800">
+            <li>Fixed structure: 3 rounds × 3 games (9 games each)</li>
+            <li>First to 9, win by 1 — ~10 minutes per game</li>
+            <li>Round 1 pro-am pairing; Rounds 2–3 from live standings</li>
+            <li>Player count must be divisible by 4 (8, 12, 16…)</li>
+          </ul>
+        </div>
+      )}
 
       {formData.format === 'group' && (
         <>

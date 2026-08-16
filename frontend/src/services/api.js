@@ -139,6 +139,25 @@ export const gameDayAPI = {
       method: 'POST',
     })
   },
+
+  // Divide & Conquer
+  async startDivideRound(id, round) {
+    return apiRequest(`/gamedays/${id}/divide/start-round`, {
+      method: 'POST',
+      body: JSON.stringify({ round }),
+    })
+  },
+
+  async getDivideStatus(id) {
+    return apiRequest(`/gamedays/${id}/divide/status`)
+  },
+
+  async swapDividePartners(id, player1Id, player2Id) {
+    return apiRequest(`/gamedays/${id}/divide/swap-partners`, {
+      method: 'POST',
+      body: JSON.stringify({ player1Id, player2Id }),
+    })
+  },
 }
 
 // Athlete APIs
@@ -151,6 +170,11 @@ export const athleteAPI = {
   // Get single athlete by ID
   async getById(id) {
     return apiRequest(`/athletes/${id}`)
+  },
+
+  // Get rating history for an athlete
+  async getRatingHistory(id, limit = 20) {
+    return apiRequest(`/athletes/${id}/rating-history?limit=${limit}`)
   },
   
   // Create new athlete
@@ -243,6 +267,11 @@ export const leaderboardAPI = {
   // Get overall season leaderboard
   async getOverall() {
     return apiRequest('/leaderboard')
+  },
+
+  // Get MPR skill leaderboard
+  async getMpr() {
+    return apiRequest('/leaderboard/mpr')
   },
   
   // Get leaderboard for specific date range
@@ -350,6 +379,13 @@ export const teamsAPI = {
     return apiRequest(`/gamedays/${gameDayId}/pairs/auto-allocate`, {
       method: 'POST',
     })
+  },
+}
+
+// Admin MPR APIs
+export const mprAPI = {
+  async rebackfill() {
+    return apiRequest('/admin/mpr/rebackfill', { method: 'POST' })
   },
 }
 

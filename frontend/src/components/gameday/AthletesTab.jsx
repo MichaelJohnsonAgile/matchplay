@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import Modal from '../Modal'
 import { AlertModal, ConfirmModal } from '../Alert'
 import { athleteAPI, gameDayAPI, matchAPI } from '../../services/api'
+import { formatMpr, formatMprWithReliability } from '../../lib/mpr'
 
 export default function AthletesTab({ gameDayId, gameDay, onUpdate, isAdminMode = false }) {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false)
@@ -12,7 +13,13 @@ export default function AthletesTab({ gameDayId, gameDay, onUpdate, isAdminMode 
   const [isLoading, setIsLoading] = useState(true)
   const [matches, setMatches] = useState([])
   const [addModalSearch, setAddModalSearch] = useState('')
+  const [divideStatus, setDivideStatus] = useState(null)
+  const [swapMode, setSwapMode] = useState(false)
+  const [selectedPlayer, setSelectedPlayer] = useState(null)
+  const [swapping, setSwapping] = useState(false)
   
+  const isDivideMode = gameDay?.settings?.format === 'divide'
+  const athleteCountValidForDivide = gameDayAthletes.length >= 4 && gameDayAthletes.length % 4 === 0
   // Alert and confirm modals
   const [alertModal, setAlertModal] = useState({ isOpen: false, title: '', message: '', type: 'info' })
   const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: '', message: '', onConfirm: null })
@@ -25,14 +32,25 @@ export default function AthletesTab({ gameDayId, gameDay, onUpdate, isAdminMode 
   const loadData = async () => {
     try {
       setIsLoading(true)
-      const [all, gameDay, matchesData] = await Promise.all([
+      const [all, gameDayAthletesData, matchesData] = await Promise.all([
         athleteAPI.getAll(),
         athleteAPI.getForGameDay(gameDayId),
         matchAPI.getForGameDay(gameDayId)
       ])
       setAllAthletes(all)
-      setGameDayAthletes(gameDay)
+      setGameDayAthletes(gameDayAthletesData)
       setMatches(matchesData)
+
+      if (gameDay?.settings?.format === 'divide') {
+        try {
+          const status = await gameDayAPI.getDivideStatus(gameDayId)
+          setDivideStatus(status)
+        } catch {
+          setDivideStatus(null)
+        }
+      } else {
+        setDivideStatus(null)
+      }
     } catch (err) {
       console.error('Failed to load data:', err)
     } finally {
@@ -112,6 +130,10 @@ export default function AthletesTab({ gameDayId, gameDay, onUpdate, isAdminMode 
   }
   
   const handleGenerateDraw = async () => {
+    if (isDivideMode) {
+      return handleStartDivideRound(1)
+    }
+
     if (gameDayAthletes.length < 8) {
       setAlertModal({
         isOpen: true,
@@ -172,6 +194,40 @@ export default function AthletesTab({ gameDayId, gameDay, onUpdate, isAdminMode 
       setIsGenerating(false)
     }
   }
+
+  const handleStartDivideRound = async (roundNumber) => {
+    if (!athleteCountValidForDivide) {
+      setAlertModal({
+        isOpen: true,
+        title: 'Cannot Start Round',
+        message: `Need a player count divisible by 4 (currently ${gameDayAthletes.length}). Add or remove athletes.`,
+        type: 'warning'
+      })
+      return
+    }
+
+    setIsGenerating(true)
+    try {
+      const response = await gameDayAPI.startDivideRound(gameDayId, roundNumber)
+      await loadData()
+      if (onUpdate) onUpdate()
+      setAlertModal({
+        isOpen: true,
+        title: `Round ${roundNumber} Started`,
+        message: `Game 1 is ready on ${response.matchesGenerated} court(s). Switch to Matches to score.`,
+        type: 'success'
+      })
+    } catch (error) {
+      setAlertModal({
+        isOpen: true,
+        title: 'Error',
+        message: error.message || 'Failed to start round.',
+        type: 'error'
+      })
+    } finally {
+      setIsGenerating(false)
+    }
+  }
   
   const handleCancelDraw = async () => {
     setConfirmModal({
@@ -213,6 +269,146 @@ export default function AthletesTab({ gameDayId, gameDay, onUpdate, isAdminMode 
   // Check if draw has been generated AND any scores have been entered
   const hasMatchesWithScores = matches.length > 0 && 
     matches.some(m => m.teamA?.score !== null && m.teamB?.score !== null)
+
+  const divideSessionStarted = isDivideMode && (
+    (gameDay?.settings?.divideCurrentRound ?? 0) > 0 || matches.length > 0
+  )
+
+  const canSwapRound1Partners = isDivideMode && divideStatus?.canSwapRound1Partners
+
+  const round1PairGroups = (() => {
+    if (!canSwapRound1Partners) return []
+
+    return matches
+      .filter((m) => m.round === 1 && m.group === 1)
+      .sort((a, b) => (a.court || 0) - (b.court || 0))
+      .map((match) => ({
+        matchId: match.id,
+        court: match.court,
+        pairs: [
+          {
+            pairKey: `${match.id}:A`,
+            label: 'Pair A',
+            players: match.teamA.players.map((id) => ({
+              id,
+              name: gameDayAthletes.find((a) => a.id === id)?.name || 'Unknown',
+              rank: gameDayAthletes.find((a) => a.id === id)?.rank,
+            })),
+          },
+          {
+            pairKey: `${match.id}:B`,
+            label: 'Pair B',
+            players: match.teamB.players.map((id) => ({
+              id,
+              name: gameDayAthletes.find((a) => a.id === id)?.name || 'Unknown',
+              rank: gameDayAthletes.find((a) => a.id === id)?.rank,
+            })),
+          },
+        ],
+      }))
+  })()
+
+  function handleToggleSwapMode() {
+    setSwapMode(!swapMode)
+    setSelectedPlayer(null)
+  }
+
+  function handlePairPlayerClick(player, pairKey) {
+    if (!swapMode || !isAdminMode || !canSwapRound1Partners) return
+
+    if (!selectedPlayer) {
+      setSelectedPlayer({
+        playerId: player.id,
+        playerName: player.name,
+        pairKey,
+      })
+      return
+    }
+
+    if (selectedPlayer.playerId === player.id) {
+      setSelectedPlayer(null)
+      return
+    }
+
+    if (selectedPlayer.pairKey === pairKey) {
+      setSelectedPlayer({
+        playerId: player.id,
+        playerName: player.name,
+        pairKey,
+      })
+      return
+    }
+
+    confirmSwapPartners(selectedPlayer.playerId, player.id)
+  }
+
+  async function confirmSwapPartners(player1Id, player2Id) {
+    setSwapping(true)
+    try {
+      await gameDayAPI.swapDividePartners(gameDayId, player1Id, player2Id)
+      await loadData()
+      if (onUpdate) onUpdate()
+      setSelectedPlayer(null)
+      setAlertModal({
+        isOpen: true,
+        title: 'Partners Updated',
+        message: 'Round 1 partners have been swapped.',
+        type: 'success',
+      })
+    } catch (err) {
+      setAlertModal({
+        isOpen: true,
+        title: 'Error',
+        message: err.message || 'Failed to swap partners.',
+        type: 'error',
+      })
+    } finally {
+      setSwapping(false)
+    }
+  }
+
+  const renderDivideAdminButtons = () => {
+    if (!divideStatus) return null
+
+    if (divideStatus.canStartRound1) {
+      return (
+        <button
+          className="bg-orange-600 text-white px-4 py-2 text-sm font-medium hover:bg-orange-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+          onClick={() => handleStartDivideRound(1)}
+          disabled={isGenerating || !athleteCountValidForDivide}
+          title={!athleteCountValidForDivide ? 'Need player count divisible by 4' : ''}
+        >
+          {isGenerating ? 'Starting...' : 'Start Round 1'}
+        </button>
+      )
+    }
+
+    if (divideStatus.canStartRound2) {
+      return (
+        <button
+          className="bg-orange-600 text-white px-4 py-2 text-sm font-medium hover:bg-orange-700 disabled:bg-gray-400"
+          onClick={() => handleStartDivideRound(2)}
+          disabled={isGenerating}
+        >
+          {isGenerating ? 'Starting...' : 'Start Round 2'}
+        </button>
+      )
+    }
+
+    if (divideStatus.canStartRound3) {
+      return (
+        <button
+          className="bg-orange-600 text-white px-4 py-2 text-sm font-medium hover:bg-orange-700 disabled:bg-gray-400"
+          onClick={() => handleStartDivideRound(3)}
+          disabled={isGenerating}
+        >
+          {isGenerating ? 'Starting...' : 'Start Round 3'}
+        </button>
+      )
+    }
+
+    return null
+  }
   
   return (
     <div className="space-y-4">
@@ -221,7 +417,33 @@ export default function AthletesTab({ gameDayId, gameDay, onUpdate, isAdminMode 
         <div className="flex gap-2">
           {isAdminMode && (
             <>
-              {hasMatchesWithScores ? (
+              {isDivideMode ? (
+                <>
+                  {renderDivideAdminButtons()}
+                  {canSwapRound1Partners && (
+                    <button
+                      onClick={handleToggleSwapMode}
+                      disabled={swapping}
+                      className={`px-4 py-2 text-sm font-medium transition-colors ${
+                        swapMode
+                          ? 'bg-amber-500 text-white hover:bg-amber-600'
+                          : 'border border-amber-500 text-amber-600 hover:bg-amber-50'
+                      }`}
+                    >
+                      {swapMode ? 'Exit Swap Mode' : 'Swap Partners'}
+                    </button>
+                  )}
+                  {matches.length > 0 && (
+                    <button 
+                      className="bg-red-600 text-white px-4 py-2 text-sm font-medium hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                      onClick={handleCancelDraw}
+                      disabled={isGenerating}
+                    >
+                      {isGenerating ? 'Cancelling...' : 'Cancel Session'}
+                    </button>
+                  )}
+                </>
+              ) : hasMatchesWithScores ? (
                 <button 
                   className="bg-red-600 text-white px-4 py-2 text-sm font-medium hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
                   onClick={handleCancelDraw}
@@ -241,17 +463,119 @@ export default function AthletesTab({ gameDayId, gameDay, onUpdate, isAdminMode 
               )}
             </>
           )}
-          {isAdminMode && (
+          {isAdminMode && !divideSessionStarted && (
             <button 
-              className="bg-[#377850] text-white w-10 h-10 flex items-center justify-center text-2xl font-light hover:bg-[#2a5f3c] transition-colors rounded leading-none"
+              className="bg-[#377850] text-white w-10 h-10 flex items-center justify-center text-2xl font-light hover:bg-[#2a5f3c] transition-colors rounded leading-none disabled:bg-gray-400 disabled:cursor-not-allowed"
               onClick={() => setIsAddModalOpen(true)}
-              title="Add athletes to game day"
+              title={divideSessionStarted ? 'Cannot add athletes after Round 1 has started' : 'Add athletes to game day'}
+              disabled={divideSessionStarted}
             >
               +
             </button>
           )}
         </div>
       </div>
+
+      {isDivideMode && canSwapRound1Partners && (
+        <p className="text-sm text-gray-600">
+          Round 1 Game 1 is ready. Use swap mode to adjust pro-am pairs before scoring starts.
+        </p>
+      )}
+
+      {swapMode && canSwapRound1Partners && (
+        <div className="border-2 border-amber-400 bg-amber-50 p-4 rounded-lg">
+          <div className="flex items-center gap-3">
+            <div className="flex-shrink-0">
+              <svg className="w-6 h-6 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"
+                />
+              </svg>
+            </div>
+            <div className="flex-grow">
+              <p className="font-semibold text-amber-800">Swap Mode Active</p>
+              <p className="text-sm text-amber-700">
+                {selectedPlayer
+                  ? `${selectedPlayer.playerName} selected. Click a player in a different pair to swap them.`
+                  : 'Click a player to select them, then click a player in a different pair to swap.'}
+              </p>
+            </div>
+            {selectedPlayer && (
+              <button
+                onClick={() => setSelectedPlayer(null)}
+                className="text-amber-600 hover:text-amber-800 text-sm underline"
+              >
+                Cancel selection
+              </button>
+            )}
+          </div>
+          {swapping && (
+            <div className="mt-2 text-sm text-amber-700">Swapping partners...</div>
+          )}
+        </div>
+      )}
+
+      {round1PairGroups.length > 0 && (
+        <div className="space-y-4">
+          <h3 className="text-lg font-semibold">Round 1 Partners</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {round1PairGroups.map((group) => (
+              <div key={group.matchId} className="border-2 border-orange-200 rounded-lg overflow-hidden">
+                <div className="bg-orange-500 text-white px-4 py-3 flex justify-between items-center">
+                  <span className="font-semibold">Court {group.court}</span>
+                  <span className="text-sm bg-white/20 px-2 py-0.5 rounded">Game 1</span>
+                </div>
+                <div className="p-4 space-y-4 bg-white">
+                  {group.pairs.map((pair) => (
+                    <div key={pair.pairKey}>
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                        {pair.label}
+                      </p>
+                      <div className="space-y-2">
+                        {pair.players.map((player) => {
+                          const isSelected = selectedPlayer?.playerId === player.id
+                          const isSwappable =
+                            swapMode && selectedPlayer && selectedPlayer.pairKey !== pair.pairKey
+                          const isClickable = swapMode && isAdminMode && canSwapRound1Partners
+
+                          return (
+                            <div
+                              key={player.id}
+                              onClick={() => isClickable && handlePairPlayerClick(player, pair.pairKey)}
+                              className={`flex justify-between items-center p-3 rounded border-2 transition-all ${
+                                isSelected
+                                  ? 'bg-amber-100 border-amber-400 ring-2 ring-amber-300'
+                                  : isSwappable
+                                    ? 'bg-green-50 border-green-300 hover:bg-green-100 hover:border-green-400 cursor-pointer'
+                                    : isClickable
+                                      ? 'bg-gray-50 border-gray-200 hover:bg-gray-100 hover:border-gray-300 cursor-pointer'
+                                      : 'bg-gray-50 border-gray-200'
+                              }`}
+                            >
+                              <div>
+                                <div className="font-medium">{player.name}</div>
+                                {player.rank != null && (
+                                  <div className="text-sm text-gray-500">Season rank {player.rank}</div>
+                                )}
+                              </div>
+                              {isSwappable && (
+                                <span className="text-xs text-green-600 font-medium">Click to swap</span>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       
       <div className="p-4">
         <div className="overflow-x-auto">
@@ -259,6 +583,7 @@ export default function AthletesTab({ gameDayId, gameDay, onUpdate, isAdminMode 
               <thead>
                 <tr className="border-b border-gray-200">
                   <th className="p-2 text-center font-semibold">Season Rank</th>
+                  <th className="p-2 text-center font-semibold">MPR</th>
                   <th className="p-2 text-center font-semibold">Pos</th>
                   <th className="p-2 text-left font-semibold">Athlete</th>
                   <th className="p-2 text-center font-semibold">P</th>
@@ -328,6 +653,9 @@ export default function AthletesTab({ gameDayId, gameDay, onUpdate, isAdminMode 
                 }).map((athlete, index) => (
                   <tr key={athlete.id} className="border-b border-gray-200">
                     <td className="p-2 text-center">{athlete.rank}</td>
+                    <td className="p-2 text-center font-medium text-[#377850]" title={isAdminMode ? formatMprWithReliability(athlete) : undefined}>
+                      {isAdminMode ? formatMprWithReliability(athlete) : formatMpr(athlete)}
+                    </td>
                     <td className="p-2 text-center font-semibold">{index + 1}</td>
                     <td className="p-2">{athlete.name}</td>
                     <td className="p-2 text-center">{athlete.stats.matchesPlayed}</td>
@@ -353,8 +681,14 @@ export default function AthletesTab({ gameDayId, gameDay, onUpdate, isAdminMode 
                           <button 
                             onClick={() => handleDeleteAthlete(athlete.id)}
                             className="text-red-600 hover:bg-red-50 p-1 rounded transition-colors disabled:text-gray-400 disabled:cursor-not-allowed disabled:hover:bg-transparent"
-                            disabled={hasMatchesWithScores}
-                            title={hasMatchesWithScores ? 'Cannot remove athletes after scores are entered' : 'Remove athlete'}
+                            disabled={hasMatchesWithScores || divideSessionStarted}
+                            title={
+                              divideSessionStarted
+                                ? 'Cannot remove athletes after Round 1 has started'
+                                : hasMatchesWithScores
+                                  ? 'Cannot remove athletes after scores are entered'
+                                  : 'Remove athlete'
+                            }
                           >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />

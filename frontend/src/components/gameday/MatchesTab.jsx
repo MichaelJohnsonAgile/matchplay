@@ -3,6 +3,7 @@ import { SkeletonText } from '../Skeleton'
 import Modal from '../Modal'
 import { AlertModal } from '../Alert'
 import { matchAPI, athleteAPI, gameDayAPI, teamsAPI } from '../../services/api'
+import { getMatchQuality, formatRatingDelta } from '../../lib/mpr'
 
 // Team colour definitions for visual indicators
 const TEAM_COLOR_CLASSES = {
@@ -15,6 +16,7 @@ const TEAM_COLOR_CLASSES = {
 export default function MatchesTab({ gameDayId, gameDay, isAdminMode = false }) {
   const [selectedRound, setSelectedRound] = useState('1')
   const [selectedGroup, setSelectedGroup] = useState('1')
+  const [selectedGame, setSelectedGame] = useState('1')
   const [matches, setMatches] = useState([])
   const [athletes, setAthletes] = useState({}) // Map of athleteId -> athlete object
   const [athleteTeamMap, setAthleteTeamMap] = useState({}) // Map of athleteId -> { teamName, teamColor }
@@ -148,9 +150,10 @@ export default function MatchesTab({ gameDayId, gameDay, isAdminMode = false }) 
     groupOptions.push({ value: String(i), label: `Group ${i}` })
   }
   
-  // Check if teams or pairs mode
+  // Check if teams, pairs, or divide mode
   const isTeamsMode = gameDay?.settings?.format === 'teams'
   const isPairsMode = gameDay?.settings?.format === 'pairs'
+  const isDivideMode = gameDay?.settings?.format === 'divide'
   
   // Calculate number of rounds for teams/pairs mode from match data
   const roundRobinMatches = matches.filter(m => m.round > 0)
@@ -175,8 +178,24 @@ export default function MatchesTab({ gameDayId, gameDay, isAdminMode = false }) 
     calculatedRoundOptions.push({ value: '-2', label: 'Finals' })
   }
   
+  const divideGameOptions = [
+    { value: '1', label: 'Game 1' },
+    { value: '2', label: 'Game 2' },
+    { value: '3', label: 'Game 3' },
+  ]
+
+  const divideRoundOptions = [
+    { value: '1', label: 'Round 1' },
+    { value: '2', label: 'Round 2' },
+    { value: '3', label: 'Round 3' },
+  ]
+  
   // Get matches for selected round (and group for group mode only)
-  const filteredMatches = (isTeamsMode || isPairsMode)
+  const filteredMatches = isDivideMode
+    ? matches.filter(
+        (m) => m.round === parseInt(selectedRound) && m.group === parseInt(selectedGame)
+      )
+    : (isTeamsMode || isPairsMode)
     ? matches.filter(m => m.round === parseInt(selectedRound))  // Filter by round only in teams/pairs mode
     : matches.filter(m => 
         m.round === parseInt(selectedRound) && 
@@ -378,18 +397,34 @@ export default function MatchesTab({ gameDayId, gameDay, isAdminMode = false }) 
     if (!selectedMatch) return
     
     try {
-      await matchAPI.updateScore(selectedMatch.id, {
+      const response = await matchAPI.updateScore(selectedMatch.id, {
         teamA: tempScores.teamA ? parseInt(tempScores.teamA) : null,
         teamB: tempScores.teamB ? parseInt(tempScores.teamB) : null
       })
       
-      // Reload matches
-      await loadMatches()
+      await loadData()
       closeModal()
+
+      let message = 'Score saved successfully'
+      const updates = response?.ratingUpdates
+      if (updates && updates.length > 0) {
+        const deltaLines = updates
+          .map((u) => `${u.name}: ${formatRatingDelta(u.delta)}`)
+          .join('\n')
+        message = `Score saved. MPR updated:\n${deltaLines}`
+      }
+
+      if (response?.divideAdvance?.advanced) {
+        const nextGame = response.divideAdvance.game
+        setSelectedGame(String(nextGame))
+        setSelectedRound(String(response.divideAdvance.round))
+        message += `\n\nGame ${nextGame} is ready — opponents updated from the court ladder.`
+      }
+
       setAlertModal({
         isOpen: true,
-        title: 'Success',
-        message: 'Score saved successfully',
+        title: updates?.length ? 'MPR Updated' : 'Success',
+        message,
         type: 'success'
       })
     } catch (err) {
@@ -459,7 +494,9 @@ export default function MatchesTab({ gameDayId, gameDay, isAdminMode = false }) 
           </svg>
           <p className="text-lg font-semibold mb-2">Draw Not Generated</p>
           <p className="text-sm">
-            {gameDay?.settings?.format === 'teams' 
+            {isDivideMode
+              ? 'Start Round 1 from the Athletes tab to begin the session.'
+              : gameDay?.settings?.format === 'teams' 
               ? 'Generate teams first, then generate the match draw from the Teams tab.'
               : 'Generate the match draw from the Athletes tab to view matches.'}
           </p>
@@ -471,8 +508,8 @@ export default function MatchesTab({ gameDayId, gameDay, isAdminMode = false }) 
         
         {/* Round and Group Selectors */}
         <div className="flex items-center gap-3 flex-wrap">
-          {/* Group selector - only for group mode (not teams or pairs) */}
-          {!isTeamsMode && !isPairsMode && (
+          {/* Group selector - only for group mode (not teams, pairs, or divide) */}
+          {!isTeamsMode && !isPairsMode && !isDivideMode && (
             <select
               id="group-select"
               value={selectedGroup}
@@ -487,19 +524,39 @@ export default function MatchesTab({ gameDayId, gameDay, isAdminMode = false }) 
             </select>
           )}
           
-          {/* Round selector - show for both modes */}
+          {/* Round selector */}
           <select
             id="round-select"
             value={selectedRound}
             onChange={(e) => setSelectedRound(e.target.value)}
             className="border border-gray-200 px-4 py-2 text-sm font-medium min-w-[120px]"
           >
-            {((isTeamsMode || isPairsMode) ? calculatedRoundOptions : rounds).map((round) => (
+            {(isDivideMode
+              ? divideRoundOptions
+              : (isTeamsMode || isPairsMode)
+              ? calculatedRoundOptions
+              : rounds
+            ).map((round) => (
               <option key={round.value} value={round.value}>
                 {round.label}
               </option>
             ))}
           </select>
+
+          {isDivideMode && (
+            <select
+              id="game-select"
+              value={selectedGame}
+              onChange={(e) => setSelectedGame(e.target.value)}
+              className="border border-gray-200 px-4 py-2 text-sm font-medium min-w-[120px]"
+            >
+              {divideGameOptions.map((game) => (
+                <option key={game.value} value={game.value}>
+                  {game.label}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
       </div>
       
@@ -542,7 +599,7 @@ export default function MatchesTab({ gameDayId, gameDay, isAdminMode = false }) 
       )}
       
       {/* Generate Next Round Button - only for group mode */}
-      {canGenerateNextRound && !isTeamsMode && (
+      {canGenerateNextRound && !isTeamsMode && !isDivideMode && (
         <div className="bg-green-50 border border-green-500 p-4 rounded">
           <div className="flex items-center justify-between gap-4 flex-wrap">
             <div>
@@ -573,7 +630,9 @@ export default function MatchesTab({ gameDayId, gameDay, isAdminMode = false }) 
       <div className="space-y-6">
         <div className="p-4">
           <h4 className="text-md font-semibold mb-3">
-            {(isTeamsMode || isPairsMode)
+            {isDivideMode
+              ? `Round ${selectedRound} — Game ${selectedGame} (${filteredMatches.length} match${filteredMatches.length !== 1 ? 'es' : ''})`
+              : (isTeamsMode || isPairsMode)
               ? selectedRound === '-1'
                 ? `Semi-Finals (${filteredMatches.length} match${filteredMatches.length !== 1 ? 'es' : ''})`
                 : selectedRound === '-2'
@@ -589,14 +648,16 @@ export default function MatchesTab({ gameDayId, gameDay, isAdminMode = false }) 
             </div>
           ) : filteredMatches.length === 0 ? (
             <div className="border border-gray-200 p-8 text-center text-gray-500">
-              {isTeamsMode 
+              {isDivideMode
+                ? `Game ${selectedGame} has not been generated yet. Enter scores for all courts in Game ${parseInt(selectedGame) - 1} first.`
+                : isTeamsMode 
                 ? 'No matches generated yet. Generate the draw from the Teams tab.'
                 : 'No matches generated yet. Generate the draw from the Athletes tab.'}
             </div>
           ) : (
             <>
               {/* Group Leaderboard - only for group mode (not teams or pairs) */}
-              {groupLeaderboard.length > 0 && !isTeamsMode && !isPairsMode && (
+              {groupLeaderboard.length > 0 && !isTeamsMode && !isPairsMode && !isDivideMode && (
                 <div className="mb-6 overflow-x-auto">
                   <h5 className="text-sm font-semibold mb-2">Group Standings</h5>
                   <table className="w-full border-collapse text-sm">
@@ -699,6 +760,7 @@ export default function MatchesTab({ gameDayId, gameDay, isAdminMode = false }) 
                 const hasScores = match.teamA.score !== null && match.teamB.score !== null
                 const teamAWins = hasScores && match.winner === 'teamA'
                 const teamBWins = hasScores && match.winner === 'teamB'
+                const matchQuality = hasScores ? getMatchQuality(match, athletes) : null
                 
                 return (
                   <div 
@@ -706,7 +768,17 @@ export default function MatchesTab({ gameDayId, gameDay, isAdminMode = false }) 
                     className="border border-gray-200 rounded p-3"
                   >
                     <div className="text-xs text-gray-600 mb-3 flex justify-between items-center">
-                      <span>Match {index + 1} <span className="text-gray-400">({match.id.substring(match.id.length - 8)})</span></span>
+                      <span className="flex items-center gap-2">
+                        {isDivideMode && match.court && (
+                          <span className="font-semibold text-orange-700">Court {match.court}</span>
+                        )}
+                        Match {index + 1} <span className="text-gray-400">({match.id.substring(match.id.length - 8)})</span>
+                        {matchQuality && (
+                          <span className={`px-2 py-0.5 rounded text-xs font-medium ${matchQuality.className}`}>
+                            {matchQuality.label}
+                          </span>
+                        )}
+                      </span>
                       <div className="flex items-center gap-2">
                         {match.bye && (
                           <span className="text-orange-600 font-medium inline-flex items-center gap-1">

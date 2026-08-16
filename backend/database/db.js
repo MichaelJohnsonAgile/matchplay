@@ -1,3 +1,4 @@
+import '../lib/loadEnv.js'
 import pg from 'pg'
 const { Pool } = pg
 
@@ -40,7 +41,9 @@ export async function query(text, params) {
   try {
     const res = await pool.query(text, params)
     const duration = Date.now() - start
-    console.log('Query executed:', { text: text.substring(0, 100), duration, rows: res.rowCount })
+    if (process.env.DB_QUIET !== 'true') {
+      console.log('Query executed:', { text: text.substring(0, 100), duration, rows: res.rowCount })
+    }
     return res
   } catch (error) {
     console.error('Database query error:', error)

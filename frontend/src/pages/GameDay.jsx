@@ -154,6 +154,7 @@ export default function GameDay() {
   const isTeamsMode = gameDay.settings.format === 'teams'
   const isPairsMode = gameDay.settings.format === 'pairs'
   const isGroupMode = gameDay.settings.format === 'group'
+  const isDivideMode = gameDay.settings.format === 'divide'
   
   // Build tabs dynamically based on game mode
   const tabs = [
@@ -212,9 +213,11 @@ export default function GameDay() {
               ? 'bg-blue-100 text-blue-800' 
               : isPairsMode
               ? 'bg-purple-100 text-purple-800'
+              : isDivideMode
+              ? 'bg-orange-100 text-orange-800'
               : 'bg-gray-100 text-gray-700'
           }`}>
-            {isTeamsMode ? 'Teams' : isPairsMode ? 'Pairs' : 'Groups'}
+            {isTeamsMode ? 'Teams' : isPairsMode ? 'Pairs' : isDivideMode ? 'Divide & Conquer' : 'Groups'}
           </span>
         </div>
         <div className="flex gap-2 mt-3">

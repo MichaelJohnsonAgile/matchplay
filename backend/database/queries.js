@@ -61,6 +61,7 @@ export async function getAllGameDays() {
     `SELECT 
       id, date, venue, status, format,
       points_to_win, win_by_margin, number_of_rounds, movement_rule, number_of_teams,
+      divide_current_round,
       created_at, updated_at
      FROM gamedays 
      ORDER BY date DESC`
@@ -73,6 +74,7 @@ export async function getGameDayById(id) {
     `SELECT 
       id, date, venue, status, format,
       points_to_win, win_by_margin, number_of_rounds, movement_rule, number_of_teams,
+      divide_current_round,
       created_at, updated_at
      FROM gamedays 
      WHERE id = $1`,
@@ -105,7 +107,18 @@ export async function createGameDay(gameDayData) {
 }
 
 export async function updateGameDay(id, gameDayData) {
-  const { date, venue, status, format, pointsToWin, winByMargin, numberOfRounds, movementRule, numberOfTeams } = gameDayData
+  const {
+    date,
+    venue,
+    status,
+    format,
+    pointsToWin,
+    winByMargin,
+    numberOfRounds,
+    movementRule,
+    numberOfTeams,
+    divideCurrentRound,
+  } = gameDayData
   const result = await query(
     `UPDATE gamedays 
      SET date = COALESCE($2, date),
@@ -116,10 +129,23 @@ export async function updateGameDay(id, gameDayData) {
          win_by_margin = COALESCE($7, win_by_margin),
          number_of_rounds = COALESCE($8, number_of_rounds),
          movement_rule = COALESCE($9, movement_rule),
-         number_of_teams = COALESCE($10, number_of_teams)
+         number_of_teams = COALESCE($10, number_of_teams),
+         divide_current_round = COALESCE($11, divide_current_round)
      WHERE id = $1
      RETURNING *`,
-    [id, date, venue, status, format, pointsToWin, winByMargin, numberOfRounds, movementRule, numberOfTeams]
+    [
+      id,
+      date,
+      venue,
+      status,
+      format,
+      pointsToWin,
+      winByMargin,
+      numberOfRounds,
+      movementRule,
+      numberOfTeams,
+      divideCurrentRound,
+    ]
   )
   return result.rows[0] || null
 }
@@ -134,12 +160,22 @@ export async function deleteGameDay(id) {
 
 export async function getGameDayAthletes(gameDayId) {
   const result = await query(
-    `SELECT a.id, a.name, a.email, a.status, a.rank
+    `SELECT a.id, a.name, a.email, a.status, a.rank,
+            a.doubles_rating, a.rating_reliability, a.rated_matches_count, a.rating_updated_at
      FROM athletes a
      INNER JOIN gameday_athletes ga ON a.id = ga.athlete_id
      WHERE ga.gameday_id = $1
      ORDER BY a.rank ASC`,
     [gameDayId]
+  )
+  return result.rows
+}
+
+export async function getAthletesByIds(ids) {
+  if (!ids || ids.length === 0) return []
+  const result = await query(
+    `SELECT * FROM athletes WHERE id = ANY($1)`,
+    [ids]
   )
   return result.rows
 }
@@ -199,7 +235,7 @@ export async function getMatchesByGameDay(gameDayId, filters = {}) {
     params.push(filters.group)
   }
   
-  sql += ' ORDER BY round ASC, match_group ASC, id ASC'
+  sql += ' ORDER BY round ASC, match_group ASC, court ASC NULLS LAST, id ASC'
   
   const result = await query(sql, params)
   return result.rows.map(formatMatchFromDb)
@@ -371,6 +407,9 @@ export async function getLeaderboard() {
       a.id,
       a.name,
       a.rank,
+      a.doubles_rating,
+      a.rating_reliability,
+      a.rated_matches_count,
       COUNT(DISTINCT CASE 
         WHEN m.team_a_score IS NOT NULL AND m.team_b_score IS NOT NULL 
         THEN m.id 
@@ -403,7 +442,7 @@ export async function getLeaderboard() {
       END) as group2_wins,
       -- Group 3+ wins OR any wins from teams mode (no court difficulty weighting for teams)
       COUNT(DISTINCT CASE 
-        WHEN (m.match_group >= 3 OR g.format = 'teams') AND (
+        WHEN (g.format IN ('teams', 'divide') OR m.match_group >= 3) AND (
           (m.winner = 'teamA' AND (m.team_a_player1 = a.id OR m.team_a_player2 = a.id))
           OR (m.winner = 'teamB' AND (m.team_b_player1 = a.id OR m.team_b_player2 = a.id))
         ) THEN m.id ELSE NULL 
@@ -431,7 +470,7 @@ export async function getLeaderboard() {
     )
     LEFT JOIN gamedays g ON m.gameday_id = g.id
     WHERE a.status = 'active'
-    GROUP BY a.id, a.name, a.rank
+    GROUP BY a.id, a.name, a.rank, a.doubles_rating, a.rating_reliability, a.rated_matches_count
   `)
   
   // Map rows to athlete objects with calculated stats
@@ -455,6 +494,9 @@ export async function getLeaderboard() {
       id: row.id,
       name: row.name,
       rank: row.rank,
+      doublesRating: row.doubles_rating != null ? parseFloat(row.doubles_rating) : null,
+      ratingReliability: parseInt(row.rating_reliability) || 0,
+      ratedMatchesCount: parseInt(row.rated_matches_count) || 0,
       stats: {
         matchesPlayed,
         wins,
@@ -515,7 +557,7 @@ export async function syncAthleteRanks() {
       END) as group2_wins,
       -- Group 3+ wins OR any wins from teams mode (no court difficulty weighting for teams)
       COUNT(DISTINCT CASE 
-        WHEN (m.match_group >= 3 OR g.format = 'teams') AND (
+        WHEN (g.format IN ('teams', 'divide') OR m.match_group >= 3) AND (
           (m.winner = 'teamA' AND (m.team_a_player1 = a.id OR m.team_a_player2 = a.id))
           OR (m.winner = 'teamB' AND (m.team_b_player1 = a.id OR m.team_b_player2 = a.id))
         ) THEN m.id ELSE NULL 
@@ -972,5 +1014,158 @@ export async function getMatchesByRound(gameDayId, round) {
     [gameDayId, round]
   )
   return result.rows.map(formatMatchFromDb)
+}
+
+// ============= MPR (Matchplay Rating) =============
+
+export async function hasRatingForMatch(matchId) {
+  const result = await query(
+    'SELECT 1 FROM rating_history WHERE match_id = $1 LIMIT 1',
+    [matchId]
+  )
+  return result.rowCount > 0
+}
+
+export async function updateAthleteRating(athleteId, { doublesRating, ratedMatchesCount, ratingReliability }) {
+  const result = await query(
+    `UPDATE athletes
+     SET doubles_rating = $2,
+         rated_matches_count = $3,
+         rating_reliability = $4,
+         rating_updated_at = CURRENT_TIMESTAMP
+     WHERE id = $1
+     RETURNING *`,
+    [athleteId, doublesRating, ratedMatchesCount, ratingReliability]
+  )
+  return result.rows[0] || null
+}
+
+export async function insertRatingHistory({ athleteId, matchId, ratingBefore, ratingAfter, delta }) {
+  const result = await query(
+    `INSERT INTO rating_history (athlete_id, match_id, rating_before, rating_after, delta)
+     VALUES ($1, $2, $3, $4, $5)
+     ON CONFLICT (athlete_id, match_id) DO UPDATE
+       SET rating_before = EXCLUDED.rating_before,
+           rating_after = EXCLUDED.rating_after,
+           delta = EXCLUDED.delta,
+           created_at = CURRENT_TIMESTAMP
+     RETURNING *`,
+    [athleteId, matchId, ratingBefore, ratingAfter, delta]
+  )
+  return result.rows[0]
+}
+
+export async function getRatingHistory(athleteId, limit = 20) {
+  const result = await query(
+    `SELECT rh.*, m.gameday_id, m.team_a_score, m.team_b_score, m.timestamp as match_timestamp,
+            gd.date as gameday_date, gd.venue
+     FROM rating_history rh
+     INNER JOIN matches m ON rh.match_id = m.id
+     LEFT JOIN gamedays gd ON m.gameday_id = gd.id
+     WHERE rh.athlete_id = $1
+     ORDER BY rh.created_at DESC
+     LIMIT $2`,
+    [athleteId, limit]
+  )
+  return result.rows
+}
+
+export async function getRecentRatedMatchCount(athleteId, windowDays = 90) {
+  const result = await query(
+    `SELECT COUNT(DISTINCT rh.match_id) as count
+     FROM rating_history rh
+     INNER JOIN matches m ON rh.match_id = m.id
+     WHERE rh.athlete_id = $1
+       AND m.timestamp >= NOW() - ($2 || ' days')::INTERVAL`,
+    [athleteId, windowDays]
+  )
+  return parseInt(result.rows[0]?.count) || 0
+}
+
+export async function getAllCompletedMatchesChronological() {
+  const result = await query(
+    `SELECT * FROM matches
+     WHERE winner IS NOT NULL
+       AND team_a_score IS NOT NULL
+       AND team_b_score IS NOT NULL
+     ORDER BY COALESCE(timestamp, created_at) ASC, id ASC`
+  )
+  return result.rows.map(formatMatchFromDb)
+}
+
+export async function getCompletedMatchesFromTimestamp(fromTimestamp, fromMatchId) {
+  const result = await query(
+    `SELECT * FROM matches
+     WHERE winner IS NOT NULL
+       AND team_a_score IS NOT NULL
+       AND team_b_score IS NOT NULL
+       AND (
+         COALESCE(timestamp, created_at) > $1
+         OR (COALESCE(timestamp, created_at) = $1 AND id >= $2)
+       )
+     ORDER BY COALESCE(timestamp, created_at) ASC, id ASC`,
+    [fromTimestamp, fromMatchId]
+  )
+  return result.rows.map(formatMatchFromDb)
+}
+
+export async function deleteRatingHistoryFromTimestamp(fromTimestamp, fromMatchId) {
+  await query(
+    `DELETE FROM rating_history rh
+     USING matches m
+     WHERE rh.match_id = m.id
+       AND (
+         COALESCE(m.timestamp, m.created_at) > $1
+         OR (COALESCE(m.timestamp, m.created_at) = $1 AND m.id >= $2)
+       )`,
+    [fromTimestamp, fromMatchId]
+  )
+}
+
+export async function resetAllRatings() {
+  await query('DELETE FROM rating_history')
+  await query(
+    `UPDATE athletes
+     SET doubles_rating = NULL,
+         rating_reliability = 0,
+         rated_matches_count = 0,
+         rating_updated_at = NULL`
+  )
+}
+
+export async function getRatingUpdatesForMatch(matchId) {
+  const result = await query(
+    `SELECT rh.*, a.name
+     FROM rating_history rh
+     INNER JOIN athletes a ON rh.athlete_id = a.id
+     WHERE rh.match_id = $1`,
+    [matchId]
+  )
+  return result.rows.map((row) => ({
+    athleteId: row.athlete_id,
+    name: row.name,
+    before: parseFloat(row.rating_before),
+    after: parseFloat(row.rating_after),
+    delta: parseFloat(row.delta),
+  }))
+}
+
+export async function getMprLeaderboard() {
+  const result = await query(
+    `SELECT id, name, rank, doubles_rating, rating_reliability, rated_matches_count
+     FROM athletes
+     WHERE status = 'active'
+       AND rated_matches_count >= 3
+       AND doubles_rating IS NOT NULL
+     ORDER BY doubles_rating DESC`
+  )
+  return result.rows.map((row) => ({
+    id: row.id,
+    name: row.name,
+    rank: row.rank,
+    doublesRating: parseFloat(row.doubles_rating),
+    ratingReliability: parseInt(row.rating_reliability) || 0,
+    ratedMatchesCount: parseInt(row.rated_matches_count) || 0,
+  }))
 }
 

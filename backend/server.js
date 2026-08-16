@@ -1,3 +1,4 @@
+import './lib/loadEnv.js'
 import express from 'express'
 import cors from 'cors'
 import { gameDayRoutes } from './routes/gamedays.js'
@@ -5,6 +6,7 @@ import { athleteRoutes } from './routes/athletes.js'
 import { matchRoutes } from './routes/matches.js'
 import { leaderboardRoutes } from './routes/leaderboard.js'
 import { teamsRoutes } from './routes/teams.js'
+import { adminMprRoutes } from './routes/adminMpr.js'
 
 const app = express()
 const PORT = process.env.PORT || 3001
@@ -30,6 +32,7 @@ app.use('/api/teams', teamsRoutes)     // Direct team routes
 app.use('/api/athletes', athleteRoutes)
 app.use('/api/matches', matchRoutes)
 app.use('/api/leaderboard', leaderboardRoutes)
+app.use('/api/admin/mpr', adminMprRoutes)
 
 // Health check
 app.get('/health', (req, res) => {

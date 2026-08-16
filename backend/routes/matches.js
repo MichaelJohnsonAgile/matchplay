@@ -1,5 +1,7 @@
 import express from 'express'
 import * as db from '../database/queries.js'
+import * as ratingService from '../lib/ratingService.js'
+import { tryAdvanceDivideAfterScore } from '../lib/divideService.js'
 
 export const matchRoutes = express.Router()
 
@@ -42,6 +44,15 @@ matchRoutes.put('/:id/score', async (req, res) => {
     const finalTeamBScore = teamB !== undefined ? teamB : match.teamB.score
     
     if (finalTeamAScore !== null && finalTeamBScore !== null) {
+      if (finalTeamAScore === finalTeamBScore) {
+        const gameDay = await db.getGameDayById(match.gameDayId)
+        if (gameDay?.format === 'divide') {
+          return res.status(400).json({
+            error: 'Draws are not allowed. Play one rally sudden death.',
+          })
+        }
+      }
+
       if (finalTeamAScore > finalTeamBScore) {
         updateData.winner = 'teamA'
         updateData.status = 'completed'
@@ -54,22 +65,32 @@ matchRoutes.put('/:id/score', async (req, res) => {
     
     const updatedMatch = await db.updateMatch(req.params.id, updateData)
     
+    // Divide & Conquer: generate next game when all courts finish current game
+    let divideAdvance = null
+    if (updateData.winner) {
+      divideAdvance = await tryAdvanceDivideAfterScore(match.gameDayId, updatedMatch)
+    }
+    
     // Check if all matches in the game day are complete
     const gameDayId = match.gameDayId
     const allMatches = await db.getMatchesByGameDay(gameDayId)
+    const gameDay = await db.getGameDayById(gameDayId)
     const allComplete = allMatches.length > 0 && allMatches.every(m => m.winner !== null)
     
     // Update game day status to completed if all matches are done
-    if (allComplete) {
+    if (allComplete && gameDay?.format !== 'divide') {
       await db.updateGameDay(gameDayId, { status: 'completed' })
     }
     
-    // Auto-sync athlete ranks if a match was completed
-    if (updateData.winner) {
+    let ratingUpdates = []
+    
+    // Auto-sync athlete ranks and MPR if a match was completed or score corrected
+    if (updateData.winner || (match.winner && (updateData.teamAScore !== undefined || updateData.teamBScore !== undefined))) {
       await db.syncAthleteRanks()
+      ratingUpdates = await ratingService.handleScoreUpdate(updatedMatch, match)
     }
     
-    res.json(updatedMatch)
+    res.json({ ...updatedMatch, ratingUpdates, divideAdvance })
   } catch (error) {
     console.error('Error updating match score:', error)
     res.status(500).json({ error: 'Failed to update match score' })

@@ -2,6 +2,8 @@ import express from 'express'
 import { v4 as uuidv4 } from 'uuid'
 import * as db from '../database/queries.js'
 import { calculateGroupAllocation } from '../lib/groupAllocation.js'
+import { formatAthleteMpr } from '../lib/formatAthlete.js'
+import { startDivideRound, swapRound1Partners, getDivideSessionState } from '../lib/divideService.js'
 
 export const gameDayRoutes = express.Router()
 
@@ -28,7 +30,8 @@ gameDayRoutes.get('/', async (req, res) => {
             pointsToWin: gd.points_to_win,
             winByMargin: gd.win_by_margin,
             numberOfRounds: gd.number_of_rounds,
-            movementRule: gd.movement_rule
+            movementRule: gd.movement_rule,
+            divideCurrentRound: gd.divide_current_round ?? 0,
           },
           ...stats
         }
@@ -65,7 +68,8 @@ gameDayRoutes.get('/:id', async (req, res) => {
         pointsToWin: gameDay.points_to_win,
         winByMargin: gameDay.win_by_margin,
         numberOfRounds: gameDay.number_of_rounds,
-        movementRule: gameDay.movement_rule
+        movementRule: gameDay.movement_rule,
+        divideCurrentRound: gameDay.divide_current_round ?? 0,
       },
       ...stats
     }
@@ -86,15 +90,18 @@ gameDayRoutes.post('/', async (req, res) => {
       return res.status(400).json({ error: 'Date and venue are required' })
     }
     
+    const resolvedFormat = format || 'group'
+    const isDivide = resolvedFormat === 'divide'
+
     const newGameDay = await db.createGameDay({
       id: `gd-${uuidv4()}`,
       date,
       venue,
       status: 'upcoming',
-      format: format || 'group',
-      pointsToWin: pointsToWin || 11,
-      winByMargin: winByMargin || 2,
-      numberOfRounds: rounds || 3,
+      format: resolvedFormat,
+      pointsToWin: isDivide ? (pointsToWin || 9) : (pointsToWin || 11),
+      winByMargin: isDivide ? (winByMargin || 1) : (winByMargin || 2),
+      numberOfRounds: isDivide ? 3 : (rounds || 3),
       movementRule: movementRule || 'auto',
       numberOfTeams: numberOfTeams || 2
     })
@@ -112,7 +119,8 @@ gameDayRoutes.post('/', async (req, res) => {
       winByMargin: newGameDay.win_by_margin,
       numberOfRounds: newGameDay.number_of_rounds,
       movementRule: newGameDay.movement_rule,
-      numberOfTeams: newGameDay.number_of_teams
+      numberOfTeams: newGameDay.number_of_teams,
+      divideCurrentRound: newGameDay.divide_current_round ?? 0,
     },
     ...stats
   })
@@ -182,7 +190,7 @@ gameDayRoutes.get('/:id/athletes', async (req, res) => {
       athletes.map(async (athlete) => {
         const stats = await db.getGameDayAthleteStats(req.params.id, athlete.id)
         return {
-          ...athlete,
+          ...formatAthleteMpr(athlete),
           stats
         }
       })
@@ -207,6 +215,15 @@ gameDayRoutes.post('/:id/athletes', async (req, res) => {
     if (!athleteIds || !Array.isArray(athleteIds)) {
       return res.status(400).json({ error: 'athleteIds array is required' })
     }
+
+    if (gameDay.format === 'divide' && (gameDay.divide_current_round > 0 || gameDay.status === 'in-progress')) {
+      const existingMatches = await db.getMatchesByGameDay(req.params.id)
+      if (gameDay.divide_current_round > 0 || existingMatches.length > 0) {
+        return res.status(400).json({
+          error: 'Cannot add athletes after Divide & Conquer Round 1 has started',
+        })
+      }
+    }
     
     await db.addAthletesToGameDay(req.params.id, athleteIds)
     const athleteCount = await db.getGameDayAthleteCount(req.params.id)
@@ -224,6 +241,15 @@ gameDayRoutes.delete('/:id/athletes/:athleteId', async (req, res) => {
     const gameDay = await db.getGameDayById(req.params.id)
     if (!gameDay) {
       return res.status(404).json({ error: 'Game day not found' })
+    }
+
+    if (gameDay.format === 'divide') {
+      const existingMatches = await db.getMatchesByGameDay(req.params.id)
+      if (gameDay.divide_current_round > 0 || existingMatches.length > 0) {
+        return res.status(400).json({
+          error: 'Cannot remove athletes after Divide & Conquer Round 1 has started',
+        })
+      }
     }
     
     await db.removeAthleteFromGameDay(req.params.id, req.params.athleteId)
@@ -305,6 +331,13 @@ gameDayRoutes.post('/:id/generate-draw', async (req, res) => {
     }
     
     console.log(`Game day found: ${gameDay.id}, format: ${gameDay.format}`)
+
+    if (gameDay.format === 'divide') {
+      return res.status(400).json({
+        error: 'Use Start Round 1 for Divide & Conquer format',
+        suggestion: 'Go to the Athletes tab and click Start Round 1',
+      })
+    }
     
     // Sync athlete ranks from main leaderboard before generating draw
     console.log('Syncing athlete ranks from season leaderboard...')
@@ -516,6 +549,76 @@ gameDayRoutes.post('/:id/generate-next-round', async (req, res) => {
   }
 })
 
+// POST /api/gamedays/:id/divide/start-round - Start a Divide & Conquer macro round
+gameDayRoutes.post('/:id/divide/start-round', async (req, res) => {
+  try {
+    const roundNumber = parseInt(req.body?.round, 10)
+    if (!roundNumber || roundNumber < 1 || roundNumber > 3) {
+      return res.status(400).json({ error: 'round must be 1, 2, or 3' })
+    }
+
+    const result = await startDivideRound(req.params.id, roundNumber)
+    if (result.error) {
+      return res.status(result.status || 400).json({ error: result.error })
+    }
+
+    res.json({
+      message: `Round ${roundNumber} started`,
+      ...result,
+    })
+  } catch (error) {
+    console.error('Error starting divide round:', error)
+    res.status(500).json({ error: 'Failed to start round', message: error.message })
+  }
+})
+
+// POST /api/gamedays/:id/divide/swap-partners - Swap two players between Round 1 pairs
+gameDayRoutes.post('/:id/divide/swap-partners', async (req, res) => {
+  try {
+    const { player1Id, player2Id } = req.body
+    if (!player1Id || !player2Id) {
+      return res.status(400).json({ error: 'player1Id and player2Id are required' })
+    }
+    if (player1Id === player2Id) {
+      return res.status(400).json({ error: 'Select two different players' })
+    }
+
+    const result = await swapRound1Partners(req.params.id, player1Id, player2Id)
+    if (result.error) {
+      return res.status(result.status || 400).json({ error: result.error })
+    }
+
+    res.json({
+      message: 'Partners updated',
+      ...result,
+    })
+  } catch (error) {
+    console.error('Error swapping divide partners:', error)
+    res.status(500).json({ error: 'Failed to swap partners', message: error.message })
+  }
+})
+
+// GET /api/gamedays/:id/divide/status - Session progress for Divide & Conquer
+gameDayRoutes.get('/:id/divide/status', async (req, res) => {
+  try {
+    const gameDay = await db.getGameDayById(req.params.id)
+    if (!gameDay) {
+      return res.status(404).json({ error: 'Game day not found' })
+    }
+    if (gameDay.format !== 'divide') {
+      return res.status(400).json({ error: 'Not a Divide & Conquer game day' })
+    }
+
+    const matches = await db.getMatchesByGameDay(req.params.id)
+    const session = getDivideSessionState(gameDay.divide_current_round ?? 0, matches)
+
+    res.json(session)
+  } catch (error) {
+    console.error('Error getting divide status:', error)
+    res.status(500).json({ error: 'Failed to get session status' })
+  }
+})
+
 // POST /api/gamedays/:id/cancel-draw - Cancel draw and delete all matches
 gameDayRoutes.post('/:id/cancel-draw', async (req, res) => {
   try {
@@ -526,6 +629,10 @@ gameDayRoutes.post('/:id/cancel-draw', async (req, res) => {
     
     // Delete all matches for this game day
     const matchCount = await db.deleteMatchesByGameDay(req.params.id)
+
+    if (gameDay.format === 'divide') {
+      await db.updateGameDay(req.params.id, { divideCurrentRound: 0, status: 'upcoming' })
+    }
     
     console.log(`Cancelled draw for game day ${gameDay.id}: deleted ${matchCount} matches`)
     
@@ -587,8 +694,23 @@ async function checkAndUpdateGameDayStatus(gameDayId, currentStatus, gameDate, m
   
   // Check if all matches are completed
   if (matchCount > 0) {
+    const gameDay = await db.getGameDayById(gameDayId)
     const matches = await db.getMatchesByGameDay(gameDayId)
     const completedMatches = matches.filter(m => m.winner !== null)
+
+    if (gameDay?.format === 'divide') {
+      const session = getDivideSessionState(gameDay.divide_current_round ?? 0, matches)
+      if (
+        session.sessionComplete &&
+        completedMatches.length === matches.length &&
+        matches.length > 0
+      ) {
+        await db.updateGameDay(gameDayId, { status: 'completed' })
+        console.log(`Auto-updated Divide & Conquer game day ${gameDayId} to completed`)
+        return 'completed'
+      }
+      return currentStatus === 'upcoming' ? 'in-progress' : currentStatus
+    }
     
     if (completedMatches.length === matches.length) {
       // All matches complete - update to completed
