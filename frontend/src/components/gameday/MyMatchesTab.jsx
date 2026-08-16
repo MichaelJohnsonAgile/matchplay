@@ -144,8 +144,8 @@ function isDivideRoundComplete(allMatches, macroRound) {
 }
 
 function getRankThroughRoundForDivideGroup(round, allMatches) {
-  if (isDivideRoundComplete(allMatches, round)) return round
-  if (round > 1 && isDivideRoundComplete(allMatches, round - 1)) return round - 1
+  if (round <= 1) return 0
+  if (isDivideRoundComplete(allMatches, round - 1)) return round - 1
   return 0
 }
 
@@ -218,16 +218,6 @@ function formatNameWithRank(name, rank) {
       <span className="text-gray-500 font-normal"> #{rank}</span>
     </>
   )
-}
-
-function getRankLabelForGroup(group, allMatches, isDivideMode) {
-  if (!isDivideMode || !group.round) return null
-  const throughRound = getRankThroughRoundForDivideGroup(group.round, allMatches)
-  if (throughRound === 0) return 'Season rank'
-  if (isDivideRoundComplete(allMatches, group.round)) {
-    return `Rank after Round ${group.round}`
-  }
-  return `Rank entering Round ${group.round}`
 }
 
 function getIncompleteCourtsForGame(allMatches, round, gameNumber) {
@@ -402,7 +392,6 @@ function PartnerGroup({
   myName,
   myRank,
   partnerRank,
-  rankLabel,
   isDivideMode,
   expanded,
   onToggle,
@@ -443,12 +432,6 @@ function PartnerGroup({
         <div className="min-w-0">
           <p className="font-semibold text-gray-900">{title}</p>
           <p className="text-xs text-gray-600 mt-0.5">
-            {rankLabel && (
-              <>
-                <span className="text-gray-500">{rankLabel}</span>
-                {' · '}
-              </>
-            )}
             <span className="text-green-700 font-medium">{stats.wins}W</span>
             {' · '}
             <span className="text-red-700 font-medium">{stats.losses}L</span>
@@ -730,7 +713,6 @@ export default function MyMatchesTab({ gameDayId, gameDay, onUpdate }) {
                 myName={getAthleteName(selectedAthleteId)}
                 myRank={myRank}
                 partnerRank={partnerRank}
-                rankLabel={getRankLabelForGroup(group, matches, isDivideMode)}
                 isDivideMode={isDivideMode}
                 expanded={expandedGroups.has(group.groupKey)}
                 onToggle={() => toggleGroup(group.groupKey)}
