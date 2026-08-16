@@ -181,7 +181,7 @@ export default function GameDay() {
     },
     {
       label: 'My Matches',
-      content: <MyMatchesTab gameDayId={id} gameDay={gameDay} />,
+      content: <MyMatchesTab gameDayId={id} gameDay={gameDay} onUpdate={loadGameDay} />,
       disabled: (gameDay.athleteCount || 0) === 0
     }
   ]
