@@ -1,6 +1,10 @@
 import '../lib/loadEnv.js'
 import pg from 'pg'
+import { recordQuery } from '../lib/requestContext.js'
+
 const { Pool } = pg
+
+const SLOW_DB_QUERY_MS = 100
 
 // Check for DATABASE_URL
 if (!process.env.DATABASE_URL) {
@@ -41,12 +45,19 @@ export async function query(text, params) {
   try {
     const res = await pool.query(text, params)
     const duration = Date.now() - start
+    recordQuery(start, duration)
+
     if (process.env.DB_QUIET !== 'true') {
-      console.log('Query executed:', { text: text.substring(0, 100), duration, rows: res.rowCount })
+      const preview = text.replace(/\s+/g, ' ').trim().substring(0, 80)
+      const slow = duration >= SLOW_DB_QUERY_MS ? ' SLOW' : ''
+      console.log(`[DB${slow} ${duration}ms] ${preview} | rows=${res.rowCount ?? 'n/a'}`)
     }
+
     return res
   } catch (error) {
-    console.error('Database query error:', error)
+    const duration = Date.now() - start
+    recordQuery(start, duration)
+    console.error(`[DB ERROR ${duration}ms]`, error.message)
     throw error
   }
 }

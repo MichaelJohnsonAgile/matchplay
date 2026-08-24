@@ -6,6 +6,8 @@ import { athleteRoutes } from './routes/athletes.js'
 import { matchRoutes } from './routes/matches.js'
 import { leaderboardRoutes } from './routes/leaderboard.js'
 import { teamsRoutes } from './routes/teams.js'
+import { apiTimingMiddleware } from './middleware/apiTiming.js'
+
 const app = express()
 const PORT = process.env.PORT || 3001
 
@@ -17,11 +19,8 @@ app.use(cors({
 }))
 app.use(express.json())
 
-// Request logging
-app.use((req, res, next) => {
-  console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`)
-  next()
-})
+// API request timing (logs total duration + DB query count/time per request)
+app.use(apiTimingMiddleware)
 
 // Routes
 app.use('/api/gamedays', gameDayRoutes)
