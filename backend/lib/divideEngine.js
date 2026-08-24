@@ -125,7 +125,17 @@ export function areAllGamesComplete(matches, macroRound, gameNumber) {
     (m) => m.round === macroRound && m.group === gameNumber
   )
   if (roundMatches.length === 0) return false
-  return roundMatches.every((m) => m.winner !== null)
+
+  // One slot per court — duplicate rows must not block or skew completion
+  const byCourt = new Map()
+  for (const m of roundMatches) {
+    const existing = byCourt.get(m.court)
+    if (!existing || (m.winner && !existing.winner)) {
+      byCourt.set(m.court, m)
+    }
+  }
+
+  return [...byCourt.values()].every((m) => m.winner !== null)
 }
 
 export function isMacroRoundComplete(matches, macroRound) {

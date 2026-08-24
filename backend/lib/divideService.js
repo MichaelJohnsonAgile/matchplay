@@ -1,5 +1,6 @@
 import { v4 as uuidv4 } from 'uuid'
 import * as db from '../database/queries.js'
+import { query } from '../database/db.js'
 import {
   pairProAm,
   pairEvenMatch,
@@ -169,6 +170,20 @@ export async function startDivideRound(gameDayId, roundNumber) {
     }
   }
 
+  const existingRoundGame = matches.filter(
+    (m) => m.round === roundNumber && m.group === 1
+  )
+  if (existingRoundGame.length > 0) {
+    return {
+      success: true,
+      round: roundNumber,
+      game: 1,
+      alreadyStarted: true,
+      matchesGenerated: existingRoundGame.length,
+      matches: existingRoundGame,
+    }
+  }
+
   await db.syncAthleteRanks()
 
   const withStats = await loadAthletesWithSessionStats(gameDayId)
@@ -190,6 +205,17 @@ export async function startDivideRound(gameDayId, roundNumber) {
     matchesGenerated: created.length,
     matches: created,
   }
+}
+
+function oneMatchPerCourt(matches) {
+  const byCourt = new Map()
+  for (const m of matches) {
+    const existing = byCourt.get(m.court)
+    if (!existing || (m.winner && !existing.winner)) {
+      byCourt.set(m.court, m)
+    }
+  }
+  return [...byCourt.values()]
 }
 
 export async function tryAdvanceDivideAfterScore(gameDayId, completedMatch) {
@@ -222,35 +248,52 @@ export async function tryAdvanceDivideAfterScore(gameDayId, completedMatch) {
     return { advanced: false, waitingForOtherCourts: true }
   }
 
-  const completedGameMatches = allMatches.filter(
-    (m) => m.round === macroRound && m.group === gameNumber && m.winner !== null
-  )
-
   const athleteCount = await db.getGameDayAthleteCount(gameDayId)
   const numCourts = getExpectedCourts(athleteCount)
   const nextGameNumber = gameNumber + 1
-  const matchups = computeNextGameMatchups(completedGameMatches, numCourts)
 
-  const created = []
-  for (const matchup of matchups) {
-    const match = buildMatchRecord(
-      gameDayId,
-      macroRound,
-      nextGameNumber,
-      matchup.court,
-      matchup.teamA,
-      matchup.teamB
+  await query('SELECT pg_advisory_lock(hashtext($1))', [gameDayId])
+  try {
+    const freshMatches = await db.getMatchesByGameDay(gameDayId)
+
+    const existingNextGame = freshMatches.filter(
+      (m) => m.round === macroRound && m.group === nextGameNumber
     )
-    await db.createMatch(match)
-    created.push(match)
-  }
+    if (existingNextGame.length > 0) {
+      return { advanced: false, alreadyGenerated: true }
+    }
 
-  return {
-    advanced: true,
-    round: macroRound,
-    game: nextGameNumber,
-    matchesGenerated: created.length,
-    matches: created,
+    const completedGameMatches = oneMatchPerCourt(
+      freshMatches.filter(
+        (m) => m.round === macroRound && m.group === gameNumber && m.winner !== null
+      )
+    )
+
+    const matchups = computeNextGameMatchups(completedGameMatches, numCourts)
+
+    const created = []
+    for (const matchup of matchups) {
+      const match = buildMatchRecord(
+        gameDayId,
+        macroRound,
+        nextGameNumber,
+        matchup.court,
+        matchup.teamA,
+        matchup.teamB
+      )
+      await db.createMatch(match)
+      created.push(match)
+    }
+
+    return {
+      advanced: true,
+      round: macroRound,
+      game: nextGameNumber,
+      matchesGenerated: created.length,
+      matches: created,
+    }
+  } finally {
+    await query('SELECT pg_advisory_unlock(hashtext($1))', [gameDayId])
   }
 }
 
