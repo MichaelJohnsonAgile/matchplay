@@ -11,33 +11,33 @@ export const gameDayRoutes = express.Router()
 gameDayRoutes.get('/', async (req, res) => {
   try {
     const gameDays = await db.getAllGameDays()
-    
-    // Add stats to each game day and auto-update status
-    const gameDaysWithStats = await Promise.all(
-      gameDays.map(async (gd) => {
-        const stats = await db.getGameDayStats(gd.id)
-        
-        // Auto-update status if needed
-        const updatedStatus = await checkAndUpdateGameDayStatus(gd.id, gd.status, gd.date, stats.matchCount)
-        
-        return {
-          id: gd.id,
-          date: gd.date instanceof Date ? gd.date.toISOString().split('T')[0] : gd.date,
-          venue: gd.venue,
-          status: updatedStatus,
-          settings: {
-            format: gd.format,
-            pointsToWin: gd.points_to_win,
-            winByMargin: gd.win_by_margin,
-            numberOfRounds: gd.number_of_rounds,
-            movementRule: gd.movement_rule,
-            divideCurrentRound: gd.divide_current_round ?? 0,
-          },
-          ...stats
-        }
-      })
-    )
-    
+    const statsMap = await db.getGameDayStatsMap()
+
+    const gameDaysWithStats = gameDays.map((gd) => {
+      const stats = statsMap.get(gd.id) ?? {
+        athleteCount: 0,
+        matchCount: 0,
+        rounds: gd.number_of_rounds || 0,
+        courts: 1,
+      }
+
+      return {
+        id: gd.id,
+        date: gd.date instanceof Date ? gd.date.toISOString().split('T')[0] : gd.date,
+        venue: gd.venue,
+        status: gd.status,
+        settings: {
+          format: gd.format,
+          pointsToWin: gd.points_to_win,
+          winByMargin: gd.win_by_margin,
+          numberOfRounds: gd.number_of_rounds,
+          movementRule: gd.movement_rule,
+          divideCurrentRound: gd.divide_current_round ?? 0,
+        },
+        ...stats,
+      }
+    })
+
     res.json(gameDaysWithStats)
   } catch (error) {
     console.error('Error getting game days:', error)
@@ -180,21 +180,20 @@ gameDayRoutes.get('/:id/athletes', async (req, res) => {
       return res.status(404).json({ error: 'Game day not found' })
     }
     
-    // Sync ranks from season leaderboard to ensure ranks are current
-    await db.syncAthleteRanks()
-    
     const athletes = await db.getGameDayAthletes(req.params.id)
-    
-    // Get game-day-specific stats for each athlete
-    const athletesWithStats = await Promise.all(
-      athletes.map(async (athlete) => {
-        const stats = await db.getGameDayAthleteStats(req.params.id, athlete.id)
-        return {
-          ...formatAthlete(athlete),
-          stats
-        }
-      })
-    )
+    const statsMap = await db.getGameDayAthleteStatsMap(req.params.id)
+
+    const athletesWithStats = athletes.map((athlete) => ({
+      ...formatAthlete(athlete),
+      stats: statsMap.get(athlete.id) ?? {
+        matchesPlayed: 0,
+        wins: 0,
+        losses: 0,
+        pointsFor: 0,
+        pointsAgainst: 0,
+        pointsDiff: 0,
+      },
+    }))
     
     res.json(athletesWithStats)
   } catch (error) {

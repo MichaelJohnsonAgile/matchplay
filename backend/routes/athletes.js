@@ -10,8 +10,6 @@ athleteRoutes.get('/', async (req, res) => {
   try {
     const { status } = req.query
 
-    await db.syncAthleteRanks()
-
     const athletes = await db.getAllAthletes(status)
     res.json(athletes.map(formatAthlete))
   } catch (error) {

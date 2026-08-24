@@ -363,27 +363,60 @@ function formatMatchFromDb(row) {
   }
 }
 
-// Get game day statistics
+// Get game day statistics for one game day
 export async function getGameDayStats(gameDayId) {
-  const [athleteCountResult, matchCountResult, gameDayResult] = await Promise.all([
-    query('SELECT COUNT(*) as count FROM gameday_athletes WHERE gameday_id = $1', [gameDayId]),
-    query('SELECT COUNT(*) as count FROM matches WHERE gameday_id = $1', [gameDayId]),
-    query('SELECT number_of_rounds FROM gamedays WHERE id = $1', [gameDayId])
-  ])
-  
-  const athleteCount = parseInt(athleteCountResult.rows[0].count)
-  const matchCount = parseInt(matchCountResult.rows[0].count)
-  const rounds = gameDayResult.rows[0]?.number_of_rounds || 0
-  
-  // Calculate courts based on number of athletes (groups of 4)
-  const calculatedCourts = Math.max(1, Math.floor(athleteCount / 4))
-  
-  return {
-    athleteCount,
-    matchCount,
-    rounds,
-    courts: calculatedCourts
+  const statsMap = await getGameDayStatsMap([gameDayId])
+  return statsMap.get(gameDayId) ?? {
+    athleteCount: 0,
+    matchCount: 0,
+    rounds: 0,
+    courts: 1,
   }
+}
+
+// Batch game day statistics (one query for many game days)
+export async function getGameDayStatsMap(gameDayIds = null) {
+  const params = []
+  let filterSql = ''
+
+  if (gameDayIds != null && gameDayIds.length > 0) {
+    params.push(gameDayIds)
+    filterSql = 'WHERE g.id = ANY($1)'
+  }
+
+  const result = await query(
+    `SELECT
+      g.id,
+      g.number_of_rounds,
+      COALESCE(ga.cnt, 0)::int AS athlete_count,
+      COALESCE(m.cnt, 0)::int AS match_count
+    FROM gamedays g
+    LEFT JOIN (
+      SELECT gameday_id, COUNT(*)::int AS cnt
+      FROM gameday_athletes
+      GROUP BY gameday_id
+    ) ga ON ga.gameday_id = g.id
+    LEFT JOIN (
+      SELECT gameday_id, COUNT(*)::int AS cnt
+      FROM matches
+      GROUP BY gameday_id
+    ) m ON m.gameday_id = g.id
+    ${filterSql}`,
+    params
+  )
+
+  const statsMap = new Map()
+  for (const row of result.rows) {
+    const athleteCount = row.athlete_count
+    statsMap.set(row.id, {
+      athleteCount,
+      matchCount: row.match_count,
+      rounds: row.number_of_rounds || 0,
+      courts: Math.max(1, Math.floor(athleteCount / 4)),
+    })
+  }
+
+  return statsMap
 }
 
 // Calculate leaderboard from all completed matches
@@ -611,12 +644,18 @@ export async function syncAthleteRanks() {
     return b.pointsDiff - a.pointsDiff
   })
   
-  // Update ranks in database based on sorted order
-  for (let i = 0; i < athletes.length; i++) {
-    const newRank = i + 1
+  // Update ranks in one batch query
+  if (athletes.length > 0) {
+    const ids = athletes.map((a) => a.id)
+    const ranks = athletes.map((_, i) => i + 1)
     await query(
-      'UPDATE athletes SET rank = $1 WHERE id = $2',
-      [newRank, athletes[i].id]
+      `UPDATE athletes AS a
+       SET rank = batch.rank
+       FROM (
+         SELECT unnest($1::text[]) AS id, unnest($2::int[]) AS rank
+       ) AS batch
+       WHERE a.id = batch.id`,
+      [ids, ranks]
     )
   }
   
@@ -624,51 +663,97 @@ export async function syncAthleteRanks() {
   return athletes.length
 }
 
-// Get game-day-specific athlete stats
-export async function getGameDayAthleteStats(gameDayId, athleteId) {
-  const result = await query(`
-    SELECT 
-      COUNT(DISTINCT m.id) as matches_played,
-      COUNT(DISTINCT m.id) FILTER (
-        WHERE (m.winner = 'teamA' AND (m.team_a_player1 = $2 OR m.team_a_player2 = $2))
-           OR (m.winner = 'teamB' AND (m.team_b_player1 = $2 OR m.team_b_player2 = $2))
-      ) as wins,
-      COUNT(DISTINCT m.id) FILTER (
-        WHERE (m.winner = 'teamB' AND (m.team_a_player1 = $2 OR m.team_a_player2 = $2))
-           OR (m.winner = 'teamA' AND (m.team_b_player1 = $2 OR m.team_b_player2 = $2))
-      ) as losses,
-      COALESCE(SUM(
-        CASE 
-          WHEN m.team_a_player1 = $2 OR m.team_a_player2 = $2 THEN m.team_a_score
-          WHEN m.team_b_player1 = $2 OR m.team_b_player2 = $2 THEN m.team_b_score
-          ELSE 0
-        END
-      ), 0) as points_for,
-      COALESCE(SUM(
-        CASE 
-          WHEN m.team_a_player1 = $2 OR m.team_a_player2 = $2 THEN m.team_b_score
-          WHEN m.team_b_player1 = $2 OR m.team_b_player2 = $2 THEN m.team_a_score
-          ELSE 0
-        END
-      ), 0) as points_against
-    FROM matches m
-    WHERE m.gameday_id = $1 
-      AND (m.team_a_player1 = $2 OR m.team_a_player2 = $2 OR m.team_b_player1 = $2 OR m.team_b_player2 = $2)
-      AND m.team_a_score IS NOT NULL 
-      AND m.team_b_score IS NOT NULL
-      AND (m.bye_athlete IS NULL OR m.bye_athlete != $2)
-  `, [gameDayId, athleteId])
-  
-  const row = result.rows[0]
-  
+function emptyGameDayAthleteStats() {
   return {
-    matchesPlayed: parseInt(row.matches_played),
-    wins: parseInt(row.wins),
-    losses: parseInt(row.losses),
-    pointsFor: parseInt(row.points_for),
-    pointsAgainst: parseInt(row.points_against),
-    pointsDiff: parseInt(row.points_for) - parseInt(row.points_against)
+    matchesPlayed: 0,
+    wins: 0,
+    losses: 0,
+    pointsFor: 0,
+    pointsAgainst: 0,
+    pointsDiff: 0,
   }
+}
+
+function formatGameDayAthleteStatsRow(row) {
+  const pointsFor = parseInt(row.points_for) || 0
+  const pointsAgainst = parseInt(row.points_against) || 0
+  return {
+    matchesPlayed: parseInt(row.matches_played) || 0,
+    wins: parseInt(row.wins) || 0,
+    losses: parseInt(row.losses) || 0,
+    pointsFor,
+    pointsAgainst,
+    pointsDiff: pointsFor - pointsAgainst,
+  }
+}
+
+// Get game-day-specific athlete stats for one athlete
+export async function getGameDayAthleteStats(gameDayId, athleteId) {
+  const statsMap = await getGameDayAthleteStatsMap(gameDayId)
+  return statsMap.get(athleteId) ?? emptyGameDayAthleteStats()
+}
+
+// Batch game-day athlete stats (one query for all athletes on a game day)
+export async function getGameDayAthleteStatsMap(gameDayId) {
+  const result = await query(
+    `WITH match_players AS (
+      SELECT
+        m.id AS match_id,
+        m.winner,
+        m.team_a_score,
+        m.team_b_score,
+        m.bye_athlete,
+        v.athlete_id,
+        v.side
+      FROM matches m
+      CROSS JOIN LATERAL (VALUES
+        (m.team_a_player1, 'teamA'),
+        (m.team_a_player2, 'teamA'),
+        (m.team_b_player1, 'teamB'),
+        (m.team_b_player2, 'teamB')
+      ) AS v(athlete_id, side)
+      WHERE m.gameday_id = $1
+        AND m.team_a_score IS NOT NULL
+        AND m.team_b_score IS NOT NULL
+        AND v.athlete_id IS NOT NULL
+    )
+    SELECT
+      athlete_id,
+      COUNT(DISTINCT match_id) FILTER (
+        WHERE bye_athlete IS NULL OR bye_athlete != athlete_id
+      ) AS matches_played,
+      COUNT(DISTINCT match_id) FILTER (
+        WHERE (bye_athlete IS NULL OR bye_athlete != athlete_id)
+          AND ((winner = 'teamA' AND side = 'teamA') OR (winner = 'teamB' AND side = 'teamB'))
+      ) AS wins,
+      COUNT(DISTINCT match_id) FILTER (
+        WHERE (bye_athlete IS NULL OR bye_athlete != athlete_id)
+          AND ((winner = 'teamB' AND side = 'teamA') OR (winner = 'teamA' AND side = 'teamB'))
+      ) AS losses,
+      COALESCE(SUM(
+        CASE
+          WHEN side = 'teamA' THEN team_a_score
+          WHEN side = 'teamB' THEN team_b_score
+          ELSE 0
+        END
+      ) FILTER (WHERE bye_athlete IS NULL OR bye_athlete != athlete_id), 0) AS points_for,
+      COALESCE(SUM(
+        CASE
+          WHEN side = 'teamA' THEN team_b_score
+          WHEN side = 'teamB' THEN team_a_score
+          ELSE 0
+        END
+      ) FILTER (WHERE bye_athlete IS NULL OR bye_athlete != athlete_id), 0) AS points_against
+    FROM match_players
+    GROUP BY athlete_id`,
+    [gameDayId]
+  )
+
+  const statsMap = new Map()
+  for (const row of result.rows) {
+    statsMap.set(row.athlete_id, formatGameDayAthleteStatsRow(row))
+  }
+  return statsMap
 }
 
 // ============= TEAMS =============

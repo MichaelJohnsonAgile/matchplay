@@ -1,11 +1,17 @@
 import { useState } from 'react'
 
-export default function Tabs({ tabs, defaultTab = 0 }) {
-  const [activeTab, setActiveTab] = useState(defaultTab)
+export default function Tabs({ tabs, defaultTab = 0, activeTab: controlledActiveTab, onTabChange }) {
+  const [internalActiveTab, setInternalActiveTab] = useState(defaultTab)
+  const isControlled = controlledActiveTab !== undefined
+  const activeTab = isControlled ? controlledActiveTab : internalActiveTab
 
   const handleTabClick = (index, tab) => {
     if (tab.disabled) return
-    setActiveTab(index)
+    if (isControlled) {
+      onTabChange?.(index)
+    } else {
+      setInternalActiveTab(index)
+    }
   }
 
   return (

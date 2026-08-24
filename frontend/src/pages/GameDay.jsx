@@ -24,6 +24,7 @@ export default function GameDay() {
   const [showCompleteModal, setShowCompleteModal] = useState(false)
   const [isCompleting, setIsCompleting] = useState(false)
   const [linkCopied, setLinkCopied] = useState(false)
+  const [activeTab, setActiveTab] = useState(0)
   const [editFormData, setEditFormData] = useState({
     date: '',
     venue: '',
@@ -37,12 +38,15 @@ export default function GameDay() {
   const isAdminMode = useAdminMode()
   
   useEffect(() => {
+    setActiveTab(0)
     loadGameDay()
   }, [id])
 
-  const loadGameDay = async () => {
+  const refreshGameDay = () => loadGameDay({ silent: true })
+
+  const loadGameDay = async ({ silent = false } = {}) => {
     try {
-      setIsLoading(true)
+      if (!silent) setIsLoading(true)
       const data = await gameDayAPI.getById(id)
       setGameDay(data)
       setError(null)
@@ -50,7 +54,7 @@ export default function GameDay() {
       console.error('Failed to load game day:', err)
       setError('Failed to load game day')
     } finally {
-      setIsLoading(false)
+      if (!silent) setIsLoading(false)
     }
   }
 
@@ -93,7 +97,7 @@ export default function GameDay() {
         numberOfRounds: parseInt(editFormData.rounds),
         movementRule: editFormData.movementRule
       })
-      await loadGameDay() // Reload to show updated data
+      await refreshGameDay() // Reload to show updated data
       setShowEditModal(false)
     } catch (err) {
       console.error('Failed to update game day:', err)
@@ -129,7 +133,7 @@ export default function GameDay() {
     try {
       setIsCompleting(true)
       await gameDayAPI.update(id, { status: 'completed' })
-      await loadGameDay() // Reload to show updated status
+      await refreshGameDay() // Reload to show updated status
       setShowCompleteModal(false)
     } catch (err) {
       console.error('Failed to complete game day:', err)
@@ -176,12 +180,12 @@ export default function GameDay() {
   const tabs = [
     {
       label: `Athletes (${gameDay.athleteCount || 0})`,
-      content: <AthletesTab gameDayId={id} gameDay={gameDay} onUpdate={loadGameDay} isAdminMode={isAdminMode} />,
+      content: <AthletesTab gameDayId={id} gameDay={gameDay} onUpdate={refreshGameDay} isAdminMode={isAdminMode} />,
       disabled: false
     },
     {
       label: 'My Matches',
-      content: <MyMatchesTab gameDayId={id} gameDay={gameDay} onUpdate={loadGameDay} />,
+      content: <MyMatchesTab gameDayId={id} gameDay={gameDay} onUpdate={refreshGameDay} />,
       disabled: (gameDay.athleteCount || 0) === 0
     }
   ]
@@ -190,7 +194,7 @@ export default function GameDay() {
   if (isTeamsMode || isPairsMode) {
     tabs.push({
       label: isPairsMode ? 'Pairs' : 'Teams',
-      content: <TeamsTab gameDayId={id} settings={gameDay.settings} onUpdate={loadGameDay} isAdminMode={isAdminMode} />,
+      content: <TeamsTab gameDayId={id} settings={gameDay.settings} onUpdate={refreshGameDay} isAdminMode={isAdminMode} />,
       disabled: false
     })
   }
@@ -202,7 +206,7 @@ export default function GameDay() {
         <GroupsTab
           gameDayId={id}
           gameDay={gameDay}
-          onUpdate={loadGameDay}
+          onUpdate={refreshGameDay}
           isAdminMode={isAdminMode}
         />
       ),
@@ -221,11 +225,13 @@ export default function GameDay() {
         gameDayId={id}
         gameDay={gameDay}
         isAdminMode={isAdminMode}
-        onUpdate={loadGameDay}
+        onUpdate={refreshGameDay}
       />
     ),
     disabled: !hasMatches || !divideRoundStarted
   })
+
+  const safeActiveTab = Math.min(activeTab, Math.max(0, tabs.length - 1))
 
   return (
     <div className="min-h-screen bg-white">
@@ -313,7 +319,7 @@ export default function GameDay() {
         </div>
       </header>
       <main className="p-4">
-        <Tabs tabs={tabs} />
+        <Tabs tabs={tabs} activeTab={safeActiveTab} onTabChange={setActiveTab} />
       </main>
 
       <Modal
