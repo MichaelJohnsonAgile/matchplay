@@ -259,7 +259,8 @@ export async function tryAdvanceDivideAfterScore(gameDayId, completedMatch) {
     const existingNextGame = freshMatches.filter(
       (m) => m.round === macroRound && m.group === nextGameNumber
     )
-    if (existingNextGame.length > 0) {
+    const existingCourts = new Set(existingNextGame.map((m) => m.court))
+    if (existingCourts.size >= numCourts) {
       return { advanced: false, alreadyGenerated: true }
     }
 
@@ -273,6 +274,9 @@ export async function tryAdvanceDivideAfterScore(gameDayId, completedMatch) {
 
     const created = []
     for (const matchup of matchups) {
+      if (existingCourts.has(matchup.court)) {
+        continue
+      }
       const match = buildMatchRecord(
         gameDayId,
         macroRound,
